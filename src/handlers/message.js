@@ -1,7 +1,7 @@
-const { getSystemInfo } = require('../utils/sysinfo');
-const config = require('../config');
+import { getSystemInfo } from '../utils/sysinfo.js'; // Wajib .js
+import config from '../config.js'; // Wajib .js
 
-module.exports = async (sock, m, chatUpdate) => {
+export default async (sock, m, chatUpdate) => {
     try {
         const msgType = Object.keys(m.message)[0];
         const body = msgType === 'conversation' ? m.message.conversation :
@@ -9,45 +9,41 @@ module.exports = async (sock, m, chatUpdate) => {
         
         if (!body) return;
 
-        const prefix = /^[./!#]/.test(body) ? body.match(/^[./!#]/)[0] : '';
-        if (!prefix) return;
-
-        const command = body.startsWith(prefix) ? body.slice(prefix.length).trim().split(' ')[0].toLowerCase() : '';
+        const prefix = /^[./!#]/.test(body) ? body.match(/^[./!#]/)[0] : '.';
+        const isCmd = body.startsWith(prefix);
+        const command = isCmd ? body.slice(prefix.length).trim().split(' ')[0].toLowerCase() : '';
         const args = body.trim().split(/ +/).slice(1);
         const remoteJid = m.key.remoteJid;
 
-        console.log(`[CMD] ${command} from ${remoteJid}`);
+        if (isCmd) console.log(`[CMD] ${command} dari ${remoteJid}`);
 
         switch (command) {
             case 'ping':
-                await sock.sendMessage(remoteJid, { text: 'Pong! 🏓 Bot Online di STB.' }, { quoted: m });
+                await sock.sendMessage(remoteJid, { text: 'Pong! 🏓 Bot OpenWrt siap!' }, { quoted: m });
                 break;
 
             case 'info':
             case 'status':
                 const stats = getSystemInfo();
-                const textInfo = `📊 *STB STATUS* 📊\n\n` +
-                                 `💻 Platform: ${stats.platform} (${stats.arch})\n` +
-                                 `🧠 RAM Used: ${stats.ramUsed} / ${stats.ramTotal}\n` +
-                                 `🆓 RAM Free: ${stats.ramFree}\n` +
-                                 `⏱️ Uptime: ${stats.uptime}`;
+                const textInfo = `📊 *STATUS STB B860H* 📊\n\n` +
+                                 `🖥️ Platform: ${stats.platform} (${stats.arch})\n` +
+                                 `🧠 RAM Pakai: ${stats.ramUsed}\n` +
+                                 `🆓 RAM Sisa: ${stats.ramFree}\n` +
+                                 `⏱️ Uptime: ${stats.uptime}\n\n` +
+                                 `_Powered by Baileys on OpenWrt_`;
+                
                 await sock.sendMessage(remoteJid, { text: textInfo }, { quoted: m });
                 break;
 
             case 'menu':
-                const menu = `Hello! Ini bot OpenWrt.\n\n` +
-                             `Commands:\n` +
-                             `- ${prefix}ping\n` +
-                             `- ${prefix}info (Cek Status STB)\n` +
-                             `- ${prefix}menu`;
-                await sock.sendMessage(remoteJid, { text: menu }, { quoted: m });
-                break;
-
-            default:
+                const menuText = `Halo! Ini menu bot:\n\n` +
+                                 `➤ *${prefix}ping* - Cek respon\n` +
+                                 `➤ *${prefix}info* - Cek RAM & Uptime STB`;
+                await sock.sendMessage(remoteJid, { text: menuText }, { quoted: m });
                 break;
         }
 
     } catch (err) {
-        console.error('Error handling message:', err);
+        console.error('Error di message handler:', err);
     }
 };

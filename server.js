@@ -1,17 +1,21 @@
-const { 
-    default: makeWASocket, 
+import { 
+    makeWASocket, 
     useMultiFileAuthState, 
     DisconnectReason, 
     makeCacheableSignalKeyStore,
     Browsers
-} = require('@whiskeysockets/baileys');
-const pino = require('pino');
-const NodeCache = require('node-cache'); 
-const path = require('path');
-const qrcode = require('qrcode-terminal'); // <--- 1. WAJIB IMPORT INI
+} from '@whiskeysockets/baileys';
+import pino from 'pino';
+import NodeCache from 'node-cache';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import qrcode from 'qrcode-terminal';
 
-const config = require('./src/config');
-const messageHandler = require('./src/handlers/message');
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+import config from './src/config.js';
+import messageHandler from './src/handlers/message.js';
 
 const groupCache = new NodeCache({ stdTTL: 5 * 60, useClones: false });
 
@@ -20,36 +24,25 @@ async function startBot() {
     
     const sock = makeWASocket({
         logger: pino({ level: 'fatal' }), 
-        
-        // 2. MATIKAN INI (Sudah deprecated)
         printQRInTerminal: false, 
-
         browser: Browsers.ubuntu("Chrome"),
-
         auth: {
             creds: state.creds,
             keys: makeCacheableSignalKeyStore(state.keys, pino({ level: "fatal" }))
         },
-
         markOnlineOnConnect: false,
         cachedGroupMetadata: async (jid) => groupCache.get(jid),
-
         getMessage: async (key) => {
-            return {
-                conversation: 'Hello'
-            }
+            return { conversation: 'Hello' }
         },
-
         syncFullHistory: false 
     });
 
     sock.ev.on('connection.update', (update) => {
         const { connection, lastDisconnect, qr } = update;
 
-        // 3. RENDER QR CODE DISINI
         if (qr) {
             console.log('\nScan QR Code dibawah ini:');
-            // small: true agar QR code-nya kecil dan rapi di terminal
             qrcode.generate(qr, { small: true }); 
         }
 
