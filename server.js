@@ -43,7 +43,7 @@ async function startBot() {
 
         if (qr) {
             console.log('\nScan QR Code dibawah ini:');
-            qrcode.generate(qr, { small: true }); 
+            qrcode.generate(qr, { small: true });
         }
 
         if (connection === 'close') {
