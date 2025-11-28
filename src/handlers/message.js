@@ -1,4 +1,5 @@
 import { getSystemInfo } from '../utils/sysinfo.js';
+import { exec } from 'child_process';
 import config from '../config.js';
 
 export default async (sock, m, chatUpdate) => {
@@ -20,6 +21,26 @@ export default async (sock, m, chatUpdate) => {
         switch (command) {
             case 'menu':
                 await sock.sendMessage(remoteJid, { text: `🤖 *Menu Bot*\n\n• .ping - Cek respon bot\n• .info - Info sistem bot` }, { quoted: m });
+                break;
+
+            case 'speedtest':
+            case 'speed':
+                await sock.sendMessage(remoteJid, { text: '🚀 *Speedtest sedang berjalan...*\n⏳ Mohon tunggu sekitar 30-60 detik.' }, { quoted: m });
+
+                exec('speedtest --accept-license --accept-gdpr', async (error, stdout, stderr) => {
+                    
+                    if (error) {
+                        console.error(`Exec error: ${error}`);
+                        return sock.sendMessage(remoteJid, { text: '❌ Gagal menjalankan speedtest. Pastikan package speedtest terinstall.' }, { quoted: m });
+                    }
+
+                    const output = stdout + (stderr ? `\n\nCatatan:\n${stderr}` : '');
+
+                    const replyText = `📊 *HASIL SPEEDTEST STB* 📊\n\n` +
+                                      `\`\`\`${output.trim()}\`\`\``;
+
+                    await sock.sendMessage(remoteJid, { text: replyText }, { quoted: m });
+                });
                 break;
 
             case 'ping':
