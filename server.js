@@ -10,6 +10,7 @@ import NodeCache from 'node-cache';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import qrcode from 'qrcode-terminal';
+import { initCron } from './src/utils/cron.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -56,6 +57,8 @@ async function startBot() {
             }
         } else if (connection === 'open') {
             console.log('✅ Bot Terhubung ke WhatsApp!');
+
+            initCron(sock);
         }
     });
 
