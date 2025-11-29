@@ -1,4 +1,5 @@
 import { getSystemInfo } from '../utils/sysinfo.js';
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { exec } from 'child_process';
 import axios from 'axios';
 import config from '../config.js';
@@ -60,27 +61,25 @@ export default async (sock, m, chatUpdate) => {
                 await react("🧠");
 
                 try {
-                    const query = args.join(" ");
                     const apiKey = process.env.GEMINI_API_KEY;
-                    
                     if (!apiKey) {
                          await sock.sendMessage(remoteJid, { text: '❌ Gemini API Key missing in .env' }, { quoted: m });
                          return await react("❌");
                     }
 
-                    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-                    const response = await axios.post(url, {
-                        contents: [{ parts: [{ text: query }] }]
-                    });
+                    const genAI = new GoogleGenerativeAI(apiKey);
+                    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
 
-                    const answer = response.data.candidates[0].content.parts[0].text;
+                    const result = await model.generateContent(args.join(" "));
+                    const response = await result.response;
+                    const answer = response.text();
 
                     await sock.sendMessage(remoteJid, { text: `🤖 *Gemini AI:*\n\n${answer}` }, { quoted: m });
                     await react("✅");
 
                 } catch (e) {
-                    console.error(e);
-                    await sock.sendMessage(remoteJid, { text: '❌ AI is currently unavailable.' }, { quoted: m });
+                    console.error("Gemini Error:", e);
+                    await sock.sendMessage(remoteJid, { text: '❌ AI is currently unavailable or API Key is invalid.' }, { quoted: m });
                     await react("❌");
                 }
                 break;
