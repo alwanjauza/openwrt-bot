@@ -26,32 +26,38 @@ export const getHuaweiSMS = async () => {
         const loginPayload = `<?xml version="1.0" encoding="UTF-8"?><request><Username>${USER}</Username><Password>${passwordHash}</Password><password_type>4</password_type></request>`;
 
         res = await axios.post(`${BASE_URL}/user/login`, loginPayload, {
-            headers: { 'Cookie': cookie, '__RequestVerificationToken': token, 'Content-Type': 'text/xml' }
+            headers: { 
+                'Cookie': cookie, 
+                '__RequestVerificationToken': token, 
+                'Content-Type': 'text/xml' 
+            }
         });
 
         const loginResult = await parser.parseStringPromise(res.data);
-        console.log("   Status Login:", JSON.stringify(loginResult));
-
         if (loginResult.error) {
             console.log("   ❌ LOGIN GAGAL! Code:", loginResult.error.code);
-            return []; 
+            if (loginResult.error.code !== '108006') return []; 
+        } else {
+            console.log("   ✅ Login Sukses.");
         }
-
-        console.log("3. Refresh Token...");
-        res = await axios.get(`${BASE_URL}/webserver/SesTokInfo`, { headers: { 'Cookie': cookie } });
-        data = await parser.parseStringPromise(res.data);
         
-        token = data.response.TokInfo;
-
-        console.log("4. Fetch SMS...");
-        const smsPayload = `<?xml version="1.0" encoding="UTF-8"?><request><PageIndex>1</PageIndex><ReadCount>20</ReadCount><BoxType>1</BoxType><SortType>0</SortType><Ascending>0</Ascending><UnreadPreferred>0</UnreadPreferred></request>`;
+        console.log("3. Fetch SMS (Using same token)...");
+        
+        const smsPayload = `<?xml version="1.0" encoding="UTF-8"?>
+<request>
+    <PageIndex>1</PageIndex>
+    <ReadCount>20</ReadCount>
+    <BoxType>1</BoxType>
+    <SortType>0</SortType>
+    <Ascending>0</Ascending>
+    <UnreadPreferred>0</UnreadPreferred>
+</request>`;
 
         res = await axios.post(`${BASE_URL}/sms/sms-list`, smsPayload, {
             headers: { 
                 'Cookie': cookie, 
                 '__RequestVerificationToken': token, 
-                'Content-Type': 'text/xml',
-                'X-Requested-With': 'XMLHttpRequest'
+                'Content-Type': 'text/xml; charset=UTF-8'
             }
         });
 
