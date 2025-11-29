@@ -451,19 +451,13 @@ ${smsList.trim()}
           { quoted: m }
         );
 
-        const cmd = `vnstat -i ${iface} && echo "--------------------------------------------------" && vnstat -i ${iface} -w`;
+        const cmd = `vnstat -i ${iface}; echo "--------------------------------------------------"; vnstat -i ${iface} -w || true`;
 
         exec(cmd, (err, stdout, stderr) => {
-          if (err) {
-            const errMsg = `❌ *Gagal mengambil data br-lan*\n\nError:\n\`\`\`${
-              stderr || err.message
-            }\`\`\``;
-            return sock.sendMessage(remoteJid, { text: errMsg }, { quoted: m });
-          }
+          if (stdout && stdout.trim().length > 0) {
+            const output = stdout.trim();
 
-          const output = stdout.trim();
-
-          const msg = `╭──〔 📊 TRAFFIC LAN/WIFI 〕──
+            const msg = `╭──〔 📊 TRAFFIC LAN/WIFI 〕──
 ┊
 ┊ *Interface:* BR-LAN (Total Client)
 ┊
@@ -471,8 +465,16 @@ ${smsList.trim()}
 ┊
 ╰──────────────────────`;
 
-          sock.sendMessage(remoteJid, { text: msg }, { quoted: m });
-          react("✅");
+            sock.sendMessage(remoteJid, { text: msg }, { quoted: m });
+            react("✅");
+          } else {
+            // Kalau benar-benar kosong barulah kita bilang error
+            const errMsg = `❌ *Gagal mengambil data br-lan*\n\nError:\n\`\`\`${
+              stderr || err?.message || "Unknown Error"
+            }\`\`\``;
+            sock.sendMessage(remoteJid, { text: errMsg }, { quoted: m });
+            react("❌");
+          }
         });
         break;
     }
