@@ -2,6 +2,7 @@ import { getSystemInfo } from '../utils/sysinfo.js';
 import { exec } from 'child_process';
 import axios from 'axios';
 import config from '../config.js';
+import { getHuaweiSMS } from '../utils/huawei.js';
 
 export default async (sock, m, chatUpdate) => {
     try {
@@ -42,6 +43,7 @@ export default async (sock, m, chatUpdate) => {
 ┊ 📱 *SYSTEM*
 ┊ • ${prefix}info
 ┊ • ${prefix}ping
+┊ • ${prefix}sms
 ┊
 ┊ 🌍 *TOOLS*
 ┊ • ${prefix}weather <city>
@@ -202,6 +204,54 @@ ${answer.trim()}
                     await sock.sendMessage(remoteJid, { video: { url: v.play }, caption: `╭──〔 🎵 TIKTOK 〕──\n┊ 📝 ${v.title}\n┊ 👤 ${v.author.nickname}\n╰────────────────` }, { quoted: m });
                     await react("✅");
                 } catch (e) { await react("❌"); }
+                break;
+
+            case 'sms':
+            case 'inbox':
+                if (!remoteJid.includes(config.ownerNumber.replace('@s.whatsapp.net', ''))) {
+                    return await react("❌");
+                }
+                
+                await react("📩");
+                await sock.sendMessage(remoteJid, { text: '⏳ Fetching SMS from Huawei HiLink...' }, { quoted: m });
+
+                try {
+                    const messages = await getHuaweiSMS();
+
+                    if (messages.length === 0) {
+                        const emptyMsg = `╭──〔 📩 MODEM INBOX 〕──
+┊
+┊ 📭 Inbox Kosong / Belum Login
+┊
+╰──────────────────────`;
+                        await sock.sendMessage(remoteJid, { text: emptyMsg }, { quoted: m });
+                        return await react("✅");
+                    }
+
+                    const limitMsg = messages.slice(0, 5);
+                    let smsList = '';
+
+                    limitMsg.forEach((sms, index) => {
+                        const date = sms.Date;
+                        const sender = sms.Phone;
+                        const content = sms.Content;
+                        smsList += `📨 *${sender}* (${date})\n${content}\n\n`;
+                    });
+
+                    const replyMsg = `╭──〔 📩 INBOX (${messages.length}) 〕──
+┊
+${smsList.trim()}
+┊
+╰──────────────────────`;
+
+                    await sock.sendMessage(remoteJid, { text: replyMsg }, { quoted: m });
+                    await react("✅");
+
+                } catch (e) {
+                    console.error(e);
+                    await sock.sendMessage(remoteJid, { text: `❌ Error: ${e.message}` }, { quoted: m });
+                    await react("❌");
+                }
                 break;
         }
 
