@@ -64,6 +64,7 @@ OWNER_NUMBER=628xxxxxxxx
 PARTNER_NUMBER=628xxxxxxxx
 BOT_NAME=OpenWrt Bot
 NINJA_API_KEY=your_api_key
+OPENWEATHER_API_KEY=your_api_key
 ```
 
 ### 3. Start Application
