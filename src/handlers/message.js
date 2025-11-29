@@ -85,15 +85,19 @@ ${answer.trim()}
                     await sock.sendMessage(remoteJid, { text: aiMsg }, { quoted: m });
                     await react("✅");
 
-                } catch (e) {
+               } catch (e) {
                     console.error("Gemini Error:", e.response ? e.response.data : e.message);
                     
                     let errMsg = '❌ AI is currently unavailable.';
                     
-                    if (e.response && e.response.status === 404) {
-                        errMsg = '❌ Model not found (Check URL/Model Name).';
-                    } else if (e.response && e.response.status === 400) {
-                        errMsg = '❌ Bad Request (Invalid API Key?).';
+                    if (e.response) {
+                        if (e.response.status === 404) {
+                            errMsg = '❌ Model not found (Check URL/Model Name).';
+                        } else if (e.response.status === 400) {
+                            errMsg = '❌ Bad Request (Invalid API Key?).';
+                        } else if (e.response.status === 429) {
+                            errMsg = '⏳ Rate limit exceeded. Please try again later.';
+                        }
                     }
                     
                     await sock.sendMessage(remoteJid, { text: errMsg }, { quoted: m });
