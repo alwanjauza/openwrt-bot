@@ -31,6 +31,9 @@ export default async (sock, m, chatUpdate) => {
                 await react("⏳");
                 const menuMsg = `╭──〔 🤖 BOT DASHBOARD 〕──
 ┊
+┊ 🤖 *INTELLIGENCE*
+┊ • ${prefix}ai <question>
+┊
 ┊ 📡 *NETWORK*
 ┊ • ${prefix}speedtest
 ┊ • ${prefix}myip
@@ -43,44 +46,75 @@ export default async (sock, m, chatUpdate) => {
 ┊ 🌍 *TOOLS*
 ┊ • ${prefix}weather <city>
 ┊ • ${prefix}tiktok <link>
+┊ • ${prefix}short <url>
 ┊
 ╰──────────────────────`;
                 await sock.sendMessage(remoteJid, { text: menuMsg }, { quoted: m });
                 await react("✅");
                 break;
 
+            case 'ai':
+            case 'ask':
+            case 'gemini':
+                if (!args.length) return await sock.sendMessage(remoteJid, { text: '❌ Please ask something! Ex: .ai How to cook rice?' }, { quoted: m });
+                await react("🧠");
+
+                try {
+                    const query = args.join(" ");
+                    const apiKey = process.env.GEMINI_API_KEY;
+                    
+                    if (!apiKey) {
+                         await sock.sendMessage(remoteJid, { text: '❌ Gemini API Key missing in .env' }, { quoted: m });
+                         return await react("❌");
+                    }
+
+                    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+                    const response = await axios.post(url, {
+                        contents: [{ parts: [{ text: query }] }]
+                    });
+
+                    const answer = response.data.candidates[0].content.parts[0].text;
+
+                    await sock.sendMessage(remoteJid, { text: `🤖 *Gemini AI:*\n\n${answer}` }, { quoted: m });
+                    await react("✅");
+
+                } catch (e) {
+                    console.error(e);
+                    await sock.sendMessage(remoteJid, { text: '❌ AI is currently unavailable.' }, { quoted: m });
+                    await react("❌");
+                }
+                break;
+
+            case 'short':
+            case 'shortlink':
+                if (!args[0]) return await sock.sendMessage(remoteJid, { text: '❌ Send a link! Ex: .short https://google.com' }, { quoted: m });
+                await react("⏳");
+
+                try {
+                    const url = `https://tinyurl.com/api-create.php?url=${args[0]}`;
+                    const res = await axios.get(url);
+                    
+                    await sock.sendMessage(remoteJid, { text: `🔗 *Shortlink Created:*\n${res.data}` }, { quoted: m });
+                    await react("✅");
+                } catch (e) {
+                    await sock.sendMessage(remoteJid, { text: '❌ Failed to shorten URL.' }, { quoted: m });
+                    await react("❌");
+                }
+                break;
+
             case 'ping':
                 await react("⏳");
-                const pingMsg = `╭──〔 🏓 PONG! 〕──
-┊ 
-┊ Bot Online & Ready!
-┊ Speed: Fast ⚡
-┊
-╰──────────────────────`;
-                await sock.sendMessage(remoteJid, { text: pingMsg }, { quoted: m });
+                await sock.sendMessage(remoteJid, { text: `╭──〔 🏓 PONG! 〕──\n┊ \n┊ Bot Online & Ready!\n┊ Speed: Fast ⚡\n┊\n╰──────────────────────` }, { quoted: m });
                 await react("✅");
                 break;
 
             case 'info':
                 await react("⏳");
                 const stats = getSystemInfo();
-                
                 exec('cat /sys/class/thermal/thermal_zone0/temp', async (err, stdout) => {
                     let temp = 'N/A';
-                    if (!err) {
-                        temp = (parseInt(stdout) / 1000).toFixed(1) + '°C';
-                    }
-
-                    const infoMsg = `╭──〔 📊 STB STATUS 〕──
-┊
-┊ 🖥️ Platform : ${stats.platform} (${stats.arch})
-┊ 🌡️ Temp     : ${temp}
-┊ 🧠 RAM Used : ${stats.ramUsed}
-┊ 🆓 RAM Free : ${stats.ramFree}
-┊ ⏱️ Uptime   : ${stats.uptime}
-┊
-╰──────────────────────`;
-                    
+                    if (!err) temp = (parseInt(stdout) / 1000).toFixed(1) + '°C';
+                    const infoMsg = `╭──〔 📊 STB STATUS 〕──\n┊\n┊ 🖥️ Platform : ${stats.platform} (${stats.arch})\n┊ 🌡️ Temp     : ${temp}\n┊ 🧠 RAM Used : ${stats.ramUsed}\n┊ 🆓 RAM Free : ${stats.ramFree}\n┊ ⏱️ Uptime   : ${stats.uptime}\n┊\n╰──────────────────────`;
                     await sock.sendMessage(remoteJid, { text: infoMsg }, { quoted: m });
                     await react("✅");
                 });
@@ -88,43 +122,17 @@ export default async (sock, m, chatUpdate) => {
 
             case 'weather':
             case 'w':
-                if (!args.length) return await sock.sendMessage(remoteJid, { text: '❌ Input city name! Ex: .weather London' }, { quoted: m });
-                
+                if (!args.length) return await sock.sendMessage(remoteJid, { text: '❌ Input city name!' }, { quoted: m });
                 await react("⏳");
-
                 try {
-                    const cityInput = args.join(' ').toLowerCase();
                     const apiKey = process.env.OPENWEATHER_API_KEY;
-
-                    if (!apiKey) {
-                        await sock.sendMessage(remoteJid, { text: '❌ OpenWeather API Key not set in .env!' }, { quoted: m });
-                        return await react("❌");
-                    }
-
-                    const apiUrl = `https://api.openweathermap.org/data/2.5/weather?q=${cityInput}&appid=${apiKey}&units=metric&lang=en`;
-                    const { data } = await axios.get(apiUrl);
-
-                    const cuacaMsg = `╭──〔 🌦️ WEATHER REPORT 〕──
-┊
-┊ 🏙️ City      : ${data.name}, ${data.sys.country}
-┊ 🌡️ Temp      : ${data.main.temp}°C
-┊ 🌡️ Feels Like: ${data.main.feels_like}°C
-┊ ☁️ Condition : ${data.weather[0].description}
-┊ 💧 Humidity  : ${data.main.humidity}%
-┊ 💨 Wind      : ${data.wind.speed} m/s
-┊
-╰──────────────────────`;
-
+                    if (!apiKey) return await react("❌");
+                    const { data } = await axios.get(`https://api.openweathermap.org/data/2.5/weather?q=${args.join(' ')}&appid=${apiKey}&units=metric&lang=en`);
+                    const cuacaMsg = `╭──〔 🌦️ WEATHER REPORT 〕──\n┊\n┊ 🏙️ City      : ${data.name}, ${data.sys.country}\n┊ 🌡️ Temp      : ${data.main.temp}°C\n┊ ☁️ Condition : ${data.weather[0].description}\n┊ 💧 Humidity  : ${data.main.humidity}%\n┊ 💨 Wind      : ${data.wind.speed} m/s\n┊\n╰──────────────────────`;
                     await sock.sendMessage(remoteJid, { text: cuacaMsg }, { quoted: m });
                     await react("✅");
-
                 } catch (e) {
-                    console.error(e);
-                    if (e.response && e.response.status === 404) {
-                        await sock.sendMessage(remoteJid, { text: `❌ City *${args.join(' ')}* not found.` }, { quoted: m });
-                    } else {
-                        await sock.sendMessage(remoteJid, { text: '❌ Error fetching weather data.' }, { quoted: m });
-                    }
+                    await sock.sendMessage(remoteJid, { text: '❌ City not found.' }, { quoted: m });
                     await react("❌");
                 }
                 break;
@@ -132,25 +140,13 @@ export default async (sock, m, chatUpdate) => {
             case 'speedtest':
             case 'speed':
                 await react("⏳");
-                await sock.sendMessage(remoteJid, { text: '🚀 *Speedtest running...*\n⏳ Please wait ±30 seconds.' }, { quoted: m });
-
+                await sock.sendMessage(remoteJid, { text: '🚀 *Speedtest running...*\n⏳ Please wait ±30s.' }, { quoted: m });
                 exec('speedtest --accept-license --accept-gdpr', async (error, stdout, stderr) => {
                     if (error) {
-                        console.error(`Exec error: ${error}`);
-                        await sock.sendMessage(remoteJid, { text: '❌ Failed to execute speedtest. Ensure package is installed.' }, { quoted: m });
+                        await sock.sendMessage(remoteJid, { text: '❌ Speedtest failed.' }, { quoted: m });
                         return await react("❌");
                     }
-
-                    const output = stdout + (stderr ? `\nNote: ${stderr}` : '');
-                    const cleanOutput = output.trim();
-
-                    const speedMsg = `╭──〔 🚀 SPEEDTEST RESULT 〕──
-┊
-${cleanOutput}
-┊
-╰──────────────────────`;
-
-                    await sock.sendMessage(remoteJid, { text: speedMsg }, { quoted: m });
+                    await sock.sendMessage(remoteJid, { text: `╭──〔 🚀 SPEEDTEST RESULT 〕──\n┊\n${stdout.trim()}\n┊\n╰──────────────────────` }, { quoted: m });
                     await react("✅");
                 });
                 break;
@@ -158,82 +154,34 @@ ${cleanOutput}
             case 'myip':
                 await react("⏳");
                 try {
-                    const res = await axios.get('https://ipinfo.io/json');
-                    const info = res.data;
-                    const ipMsg = `╭──〔 🌍 PUBLIC IP INFO 〕──
-┊
-┊ 📍 IP       : ${info.ip}
-┊ 🏢 ISP      : ${info.org}
-┊ 🏙️ Location : ${info.city}, ${info.country}
-┊
-╰──────────────────────`;
-                    await sock.sendMessage(remoteJid, { text: ipMsg }, { quoted: m });
+                    const { data } = await axios.get('https://ipinfo.io/json');
+                    await sock.sendMessage(remoteJid, { text: `╭──〔 🌍 PUBLIC IP INFO 〕──\n┊\n┊ 📍 IP       : ${data.ip}\n┊ 🏢 ISP      : ${data.org}\n┊ 🏙️ Location : ${data.city}, ${data.country}\n┊\n╰──────────────────────` }, { quoted: m });
                     await react("✅");
-                } catch (e) {
-                    await sock.sendMessage(remoteJid, { text: '❌ Failed to check IP.' }, { quoted: m });
-                    await react("❌");
-                }
+                } catch (e) { await react("❌"); }
                 break;
 
             case 'restartoc':
-                if (!remoteJid.includes(config.ownerNumber.replace('@s.whatsapp.net', ''))) {
-                   await react("❌");
-                   return await sock.sendMessage(remoteJid, { text: '⛔ You do not have access to perform this command!' }, { quoted: m });
-                }
-
+                if (!remoteJid.includes(config.ownerNumber.replace('@s.whatsapp.net', ''))) { await react("❌"); return await sock.sendMessage(remoteJid, { text: '⛔ Access Denied!' }, { quoted: m }); }
                 await react("⏳");
-                await sock.sendMessage(remoteJid, { text: '♻️ Restarting OpenClash service...' }, { quoted: m });
-                
-                exec('/etc/init.d/openclash restart', async (err, stdout) => {
-                    if (err) {
-                        await sock.sendMessage(remoteJid, { text: '❌ Failed to restart OpenClash.' }, { quoted: m });
-                        return await react("❌");
-                    }
-                    const ocMsg = `╭──〔 ✅ SUCCESS 〕──
-┊
-┊ OpenClash restarted successfully!
-┊ Please check your connection.
-┊
-╰──────────────────────`;
-                    await sock.sendMessage(remoteJid, { text: ocMsg }, { quoted: m });
+                await sock.sendMessage(remoteJid, { text: '♻️ Restarting OpenClash...' }, { quoted: m });
+                exec('/etc/init.d/openclash restart', async (err) => {
+                    if (err) { await react("❌"); return await sock.sendMessage(remoteJid, { text: '❌ Failed.' }, { quoted: m }); }
+                    await sock.sendMessage(remoteJid, { text: `╭──〔 ✅ SUCCESS 〕──\n┊\n┊ OpenClash restarted!\n┊\n╰──────────────────────` }, { quoted: m });
                     await react("✅");
                 });
                 break;
 
             case 'tiktok':
             case 'tt':
-                if (!args[0]) return await sock.sendMessage(remoteJid, { text: '❌ Please provide TikTok link!' }, { quoted: m });
+                if (!args[0]) return await sock.sendMessage(remoteJid, { text: '❌ Link required!' }, { quoted: m });
                 await react("⏳");
-                
                 try {
-                    const apiUrl = `https://www.tikwm.com/api/?url=${args[0]}`;
-                    const res = await axios.get(apiUrl);
-                    const data = res.data.data;
-                    
-                    if (!data) {
-                        await sock.sendMessage(remoteJid, { text: '❌ Video not found/Private.' }, { quoted: m });
-                        return await react("❌");
-                    }
-
-                    const ttMsg = `╭──〔 🎵 TIKTOK NO WM 〕──
-┊
-┊ 📝 Title  : ${data.title}
-┊ 👤 Author : ${data.author.nickname}
-┊ ▶️ Plays  : ${data.play_count}
-┊
-╰──────────────────────`;
-
-                    await sock.sendMessage(remoteJid, { 
-                        video: { url: data.play }, 
-                        caption: ttMsg 
-                    }, { quoted: m });
+                    const { data } = await axios.get(`https://www.tikwm.com/api/?url=${args[0]}`);
+                    if (!data.data) { await react("❌"); return await sock.sendMessage(remoteJid, { text: '❌ Not found.' }, { quoted: m }); }
+                    const v = data.data;
+                    await sock.sendMessage(remoteJid, { video: { url: v.play }, caption: `╭──〔 🎵 TIKTOK 〕──\n┊ 📝 ${v.title}\n┊ 👤 ${v.author.nickname}\n╰────────────────` }, { quoted: m });
                     await react("✅");
-                    
-                } catch (e) {
-                    console.log(e);
-                    await sock.sendMessage(remoteJid, { text: '❌ Failed to download video.' }, { quoted: m });
-                    await react("❌");
-                }
+                } catch (e) { await react("❌"); }
                 break;
         }
 
