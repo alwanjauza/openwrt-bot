@@ -1,5 +1,4 @@
 import { getSystemInfo } from '../utils/sysinfo.js';
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import { exec } from 'child_process';
 import axios from 'axios';
 import config from '../config.js';
@@ -67,19 +66,37 @@ export default async (sock, m, chatUpdate) => {
                          return await react("❌");
                     }
 
-                    const genAI = new GoogleGenerativeAI(apiKey);
-                    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+                    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+                    
+                    const response = await axios.post(url, {
+                        contents: [{ parts: [{ text: args.join(" ") }] }]
+                    }, {
+                        headers: { 'Content-Type': 'application/json' }
+                    });
 
-                    const result = await model.generateContent(args.join(" "));
-                    const response = await result.response;
-                    const answer = response.text();
+                    const answer = response.data.candidates[0].content.parts[0].text;
 
-                    await sock.sendMessage(remoteJid, { text: `🤖 *Gemini AI:*\n\n${answer}` }, { quoted: m });
+                    const aiMsg = `╭──〔 🤖 GEMINI 2.0 〕──
+┊
+${answer.trim()}
+┊
+╰──────────────────────`;
+
+                    await sock.sendMessage(remoteJid, { text: aiMsg }, { quoted: m });
                     await react("✅");
 
                 } catch (e) {
-                    console.error("Gemini Error:", e);
-                    await sock.sendMessage(remoteJid, { text: '❌ AI is currently unavailable or API Key is invalid.' }, { quoted: m });
+                    console.error("Gemini Error:", e.response ? e.response.data : e.message);
+                    
+                    let errMsg = '❌ AI is currently unavailable.';
+                    
+                    if (e.response && e.response.status === 404) {
+                        errMsg = '❌ Model not found (Check URL/Model Name).';
+                    } else if (e.response && e.response.status === 400) {
+                        errMsg = '❌ Bad Request (Invalid API Key?).';
+                    }
+                    
+                    await sock.sendMessage(remoteJid, { text: errMsg }, { quoted: m });
                     await react("❌");
                 }
                 break;
