@@ -23,7 +23,7 @@ Built with performance in mind, featuring **Auto-Update (CI/CD)** via Cronjob an
 - **🛠 Router Control**: Restart OpenClash service directly from WhatsApp (`.restartoc`).
 - **🚀 Network Tools**: Built-in Speedtest (`.speedtest`) and IP Checker (`.myip`).
 - **🎨 Media Tools**: TikTok Downloader (`.tiktok`).
-- **🤖 AI Integration**: (Optional) Integrated with Gemini/Groq API.
+- **🤖 AI Integration**: Integrated with Gemini Flash API.
 
 ## 📂 Project Structure
 
@@ -65,6 +65,7 @@ PARTNER_NUMBER=628xxxxxxxx
 BOT_NAME=OpenWrt Bot
 NINJA_API_KEY=your_api_key
 OPENWEATHER_API_KEY=your_api_key
+GEMINI_API_KEY=your_api_key
 ```
 
 ### 3. Start Application
