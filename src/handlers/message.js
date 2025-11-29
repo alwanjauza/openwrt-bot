@@ -218,7 +218,7 @@ ${answer.trim()}
                 try {
                     const messages = await getHuaweiSMS();
 
-                    if (messages.length === 0) {
+                    if (!Array.isArray(messages) || messages.length === 0) {
                         const emptyMsg = `╭──〔 📩 MODEM INBOX 〕──
 ┊
 ┊ 📭 Inbox Kosong / Belum Login
@@ -228,14 +228,34 @@ ${answer.trim()}
                         return await react("✅");
                     }
 
+                    const safe = (obj, ...keys) => {
+                        for (const k of keys) {
+                            if (obj == null) continue;
+                            if (Object.prototype.hasOwnProperty.call(obj, k) && obj[k] != null) return String(obj[k]);
+                        }
+                        return '';
+                    };
+
+                    const shorten = (text, max = 1000) => {
+                        if (!text) return '';
+                        text = String(text).trim();
+                        if (text.length <= max) return text;
+                        return text.slice(0, max) + '...';
+                    };
+
                     const limitMsg = messages.slice(0, 5);
                     let smsList = '';
 
-                    limitMsg.forEach((sms, index) => {
-                        const date = sms.Date;
-                        const sender = sms.Phone;
-                        const content = sms.Content;
-                        smsList += `📨 *${sender}* (${date})\n${content}\n\n`;
+                    limitMsg.forEach((sms) => {
+                        const date = safe(sms, 'Date', 'date', 'dateTime', 'datetime') || 'Unknown date';
+                        const sender = safe(sms, 'Phone', 'phone', 'Sender', 'sender') || 'Unknown';
+                        const content = safe(sms, 'Content', 'content', 'Message', 'message') || '';
+                        
+                        const senderClean = sender.trim();
+                        const dateClean = date.trim();
+                        const contentClean = shorten(content.replace(/\r\n/g, '\n').replace(/\s+$/g, ''));
+
+                        smsList += `📨 *${senderClean}* (${dateClean})\n${contentClean}\n\n`;
                     });
 
                     const replyMsg = `╭──〔 📩 INBOX (${messages.length}) 〕──
@@ -248,14 +268,14 @@ ${smsList.trim()}
                     await react("✅");
 
                 } catch (e) {
-                    console.error(e);
-                    await sock.sendMessage(remoteJid, { text: `❌ Error: ${e.message}` }, { quoted: m });
+                    console.error('SMS Handler Error:', e && e.message ? e.message : e);
+                    await sock.sendMessage(remoteJid, { text: `❌ Error: ${e && e.message ? e.message : 'Unknown error'}` }, { quoted: m });
                     await react("❌");
                 }
                 break;
         }
 
     } catch (err) {
-        console.error('Handler Error:', err);
+        console.error('Handler Error:', err && err.message ? err.message : err);
     }
 };
