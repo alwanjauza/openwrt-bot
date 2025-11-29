@@ -443,41 +443,39 @@ ${smsList.trim()}
       case "bw":
         await react("📊");
 
-        const iface = "eth1";
+        const cmd = `vnstat -i eth1 && echo "--------------------------------------------------" && vnstat -i eth1 -w`;
 
         await sock.sendMessage(
           remoteJid,
-          { text: "⏳ Mengambil data penggunaan..." },
+          { text: "⏳ Fetching bandwidth data..." },
           { quoted: m }
         );
 
-        exec(
-          `vnstat -i ${iface} && echo "--------------------------------------------------" && vnstat -i ${iface} -w`,
-          async (err, stdout, stderr) => {
-            if (err) {
-              console.error("Vnstat Error:", err);
-              await sock.sendMessage(
-                remoteJid,
-                { text: "❌ Gagal akses vnstat. Pastikan sudah terinstall." },
-                { quoted: m }
-              );
-              return await react("❌");
-            }
+        exec(cmd, (err, stdout, stderr) => {
+          if (err) {
+            exec("vnstat -i br-lan", (err2, stdout2) => {
+              const fallbackMsg = `⚠️ *Modem (eth1) No Data*\nMenampilkan Data LAN (br-lan):\n\n\`\`\`${
+                stdout2 || "Error reading database"
+              }\`\`\``;
+              sock.sendMessage(remoteJid, { text: fallbackMsg }, { quoted: m });
+              react("✅");
+            });
+            return;
+          }
 
-            const output = stdout.trim();
+          const output = stdout.trim();
 
-            const msg = `╭──〔 📊 TRAFFIC MONITOR 〕──
+          const msg = `╭──〔 📊 TRAFFIC MONITOR 〕──
 ┊
-┊ *Interface:* ${iface.toUpperCase()}
+┊ *Interface: ETH1 (Modem)*
 ┊
 \`\`\`${output}\`\`\`
 ┊
 ╰──────────────────────`;
 
-            await sock.sendMessage(remoteJid, { text: msg }, { quoted: m });
-            await react("✅");
-          }
-        );
+          sock.sendMessage(remoteJid, { text: msg }, { quoted: m });
+          react("✅");
+        });
         break;
     }
   } catch (err) {
