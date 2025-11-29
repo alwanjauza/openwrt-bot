@@ -51,6 +51,7 @@ export default async (sock, m, chatUpdate) => {
 ┊ • ${prefix}info
 ┊ • ${prefix}ping
 ┊ • ${prefix}sms
+┊ • ${prefix}bandwidth
 ┊
 ┊ 🌍 *TOOLS*
 ┊ • ${prefix}weather <city>

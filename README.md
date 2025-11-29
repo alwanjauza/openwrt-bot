@@ -5,7 +5,7 @@
 ![Device](https://img.shields.io/badge/Device-B860H-orange.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 
-Lightweight WhatsApp Bot designed specifically for **OpenWrt STB (B860H/HG680P)** using `@whiskeysockets/baileys`. 
+Lightweight WhatsApp Bot designed specifically for **OpenWrt STB (B860H/HG680P)** using `@whiskeysockets/baileys`.
 Built with performance in mind, featuring **Auto-Update (CI/CD)** via Cronjob and system monitoring tools.
 
 ## 📸 Preview
@@ -60,18 +60,26 @@ npm install --omit=dev
 Create a `.env` file in the root folder:
 
 ```bash
+# Bot Identity
 OWNER_NUMBER=628xxxxxxxx
 PARTNER_NUMBER=628xxxxxxxx
 BOT_NAME=OpenWrt Bot
-NINJA_API_KEY=your_api_key
-OPENWEATHER_API_KEY=your_api_key
-GEMINI_API_KEY=your_api_key
+
+# API Keys
+NINJA_API_KEY=your_ninja_key
+OPENWEATHER_API_KEY=your_weather_key
+GEMINI_API_KEY=your_gemini_key
+
+# Huawei Modem Config
+HUAWEI_MODEM_IP=your_modem_ip
+USERNAME_HUAWEI=your_modem_username
+PASSWORD_HUAWEI=your_modem_password
+DEBUG_HUAWEI=true
 ```
 
 ### 3. Start Application
 
 Use PM2 to run the bot in the background:
-
 
 ```bash
 # Install PM2 locally
@@ -91,6 +99,7 @@ Create `/etc/init.d/bot-wa` to ensure the bot starts after reboot (waiting for i
 ## 🔄 CI/CD Workflow (Auto Update)
 
 This project uses a **Pull-based CI/CD** suitable for devices behind NAT (no Public IP required).
+
 1. **Dev:** Push code from Local PC to GitHub.
 2. **Cron:** STB checks GitHub every 5 minutes.
 3. **Update:** If a new commit exists, STB executes `git pull` -> `npm install` -> `pm2 restart`.
@@ -103,17 +112,20 @@ This project uses a **Pull-based CI/CD** suitable for devices behind NAT (no Pub
 
 ## 📝 Commands List
 
-| Command | Description |
-| :--- | :--- |
-| `.menu` | Show all available commands |
-| `.ai <question>` | Chat with Gemini AI (Ask anything) |
-| `.short <url>` | Shorten long URLs (TinyURL) |
-| `.info` | Show RAM, Temp, Uptime |
-| `.speedtest` | Run network speedtest on STB |
-| `.restartoc` | Restart OpenClash Service (Owner Only) |
-| `.myip` | Check Public IP & ISP |
-| `.weather <city>` | Check current weather in specific city |
-| `.tiktok <link>` | Download TikTok video (No WM) |
+| Command           | Description                               |
+| :---------------- | :---------------------------------------- |
+| `.menu`           | Show all available commands               |
+| `.ai <question>`  | Chat with Gemini AI (Ask anything)        |
+| `.short <url>`    | Shorten long URLs (TinyURL)               |
+| `.info`           | Show RAM, Temp, Uptime                    |
+| `.bandwidth`      | Show Daily/Weekly Internet Usage (vnStat) |
+| `.sms`            | Read SMS from Huawei Modem                |
+| `.speedtest`      | Run network speedtest on STB              |
+| `.restartoc`      | Restart OpenClash Service (Owner Only)    |
+| `.myip`           | Check Public IP & ISP                     |
+| `.weather <city>` | Check current weather in specific city    |
+| `.short <url>`    | Shorten long URLs (TinyURL)               |
+| `.tiktok <link>`  | Download TikTok video (No WM)             |
 
 ## ⚠️ Disclaimer
 
