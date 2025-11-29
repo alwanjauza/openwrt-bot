@@ -1,194 +1,261 @@
+import { getSystemInfo } from '../utils/sysinfo.js';
+import { exec } from 'child_process';
 import axios from 'axios';
-import xml2js from 'xml2js';
-import crypto from 'crypto';
-import fs from 'fs';
+import config from '../config.js';
+import { getHuaweiSMS } from '../utils/huawei.js';
 
-const MODEM_IP = process.env.HUAWEI_MODEM_IP || '192.168.8.1';
-const USER = process.env.USERNAME_HUAWEI || 'admin';
-const PASS = process.env.PASSWORD_HUAWEI || 'admin';
-const BASE_URL = `http://${MODEM_IP}/api`;
-const LOG_FILE = process.env.HUAWEI_DEBUG_LOG || '/tmp/huawei-hilink-debug.log';
-const VERBOSE = process.env.DEBUG_HUAWEI === 'true' || process.env.DEBUG_HUAWEI === '1' || true;
+export default async (sock, m, chatUpdate) => {
+    try {
+        const msgType = Object.keys(m.message)[0];
+        const body = msgType === 'conversation' ? m.message.conversation :
+                     msgType === 'extendedTextMessage' ? m.message.extendedTextMessage.text : 
+                     msgType === 'imageMessage' ? m.message.imageMessage.caption : '';
+        
+        if (!body) return;
 
-const parser = new xml2js.Parser({ explicitArray: false });
-const sha256 = (data) => crypto.createHash('sha256').update(data).digest('hex');
-const b64 = (data) => Buffer.from(data).toString('base64');
+        const prefix = /^[./!#]/.test(body) ? body.match(/^[./!#]/)[0] : '.';
+        const isCmd = body.startsWith(prefix);
+        const command = isCmd ? body.slice(prefix.length).trim().split(' ')[0].toLowerCase() : '';
+        const args = body.trim().split(/ +/).slice(1);
+        const remoteJid = m.key.remoteJid;
 
-function log(...args) {
-  const msg = `[${new Date().toISOString()}]` + ' ' + args.map(a => (typeof a === 'string' ? a : JSON.stringify(a, null, 2))).join(' ');
-  console.log(msg);
-  try { fs.appendFileSync(LOG_FILE, msg + '\n'); } catch (e) { /* ignore file errors */ }
-}
+        if (isCmd) console.log(`[CMD] ${command} from ${remoteJid}`);
 
-function safeParseXml(xml) {
-  return parser.parseStringPromise(xml).catch(err => {
-    log('XML Parse Error:', err.message);
-    return null;
-  });
-}
+        const react = async (emoji) => {
+            await sock.sendMessage(remoteJid, { 
+                react: { text: emoji, key: m.key } 
+            });
+        };
 
-function buildCookieFromSetCookie(setCookieArray) {
-  if (!setCookieArray) return '';
-  try {
-    return setCookieArray.map(c => c.split(';')[0]).join('; ');
-  } catch (e) {
-    return '';
-  }
-}
+        switch (command) {
+            case 'menu':
+                await react("⏳");
+                const menuMsg = `╭──〔 🤖 BOT DASHBOARD 〕──
+┊
+┊ 🤖 *INTELLIGENCE*
+┊ • ${prefix}ai <question>
+┊
+┊ 📡 *NETWORK*
+┊ • ${prefix}speedtest
+┊ • ${prefix}myip
+┊ • ${prefix}restartoc
+┊
+┊ 📱 *SYSTEM*
+┊ • ${prefix}info
+┊ • ${prefix}ping
+┊ • ${prefix}sms
+┊
+┊ 🌍 *TOOLS*
+┊ • ${prefix}weather <city>
+┊ • ${prefix}tiktok <link>
+┊ • ${prefix}short <url>
+┊
+╰──────────────────────`;
+                await sock.sendMessage(remoteJid, { text: menuMsg }, { quoted: m });
+                await react("✅");
+                break;
 
-function normalizeToken(raw) {
-  if (!raw) return null;
-  if (Array.isArray(raw)) raw = raw.join('');
-  return raw.split('#')[0].trim();
-}
+            case 'ai':
+            case 'ask':
+            case 'gemini':
+                if (!args.length) return await sock.sendMessage(remoteJid, { text: '❌ Please ask something! Ex: .ai How to cook rice?' }, { quoted: m });
+                await react("🧠");
 
-async function httpGet(url) {
-  try {
-    const res = await axios.get(url, { timeout: 10000 });
-    if (VERBOSE) log('HTTP GET', url, '-> status', res.status);
-    if (VERBOSE) log('Response headers:', res.headers);
-    if (VERBOSE) log('Response body snippet:', typeof res.data === 'string' ? res.data.slice(0, 1000) : res.data);
-    return res;
-  } catch (err) {
-    log('HTTP GET Error for', url, err.message, err.response && { status: err.response.status, headers: err.response.headers });
-    throw err;
-  }
-}
+                try {
+                    const apiKey = process.env.GEMINI_API_KEY;
+                    if (!apiKey) {
+                         await sock.sendMessage(remoteJid, { text: '❌ Gemini API Key missing in .env' }, { quoted: m });
+                         return await react("❌");
+                    }
 
-async function httpPost(url, payload, headers = {}) {
-  try {
-    const res = await axios.post(url, payload, { headers, timeout: 15000 });
-    if (VERBOSE) log('HTTP POST', url, '-> status', res.status);
-    if (VERBOSE) log('Request headers:', headers);
-    if (VERBOSE) log('Request body snippet:', (typeof payload === 'string') ? payload.slice(0, 1000) : payload);
-    if (VERBOSE) log('Response headers:', res.headers);
-    if (VERBOSE) log('Response body snippet:', typeof res.data === 'string' ? res.data.slice(0, 2000) : res.data);
-    return res;
-  } catch (err) {
-    log('HTTP POST Error for', url, err.message, err.response && { status: err.response.status, headers: err.response.headers, dataSnippet: err.response && typeof err.response.data === 'string' ? err.response.data.slice(0,1000) : err.response && err.response.data });
-    throw err;
-  }
-}
+                    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+                    
+                    const response = await axios.post(url, {
+                        contents: [{ parts: [{ text: args.join(" ") }] }]
+                    }, {
+                        headers: { 'Content-Type': 'application/json' }
+                    });
 
-export const getHuaweiSMS = async () => {
-  try {
-    log('=== START: getHuaweiSMS ===');
+                    const answer = response.data.candidates[0].content.parts[0].text;
 
-    log('1) GET SesTokInfo:', `${BASE_URL}/webserver/SesTokInfo`);
-    const res1 = await httpGet(`${BASE_URL}/webserver/SesTokInfo`);
+                    const aiMsg = `╭──〔 🤖 GEMINI 2.0 〕──
+┊
+${answer.trim()}
+┊
+╰──────────────────────`;
 
-    log('-- res1.headers --', res1.headers);
-    log('-- res1.data (first 2000 chars) --');
-    log(typeof res1.data === 'string' ? res1.data.slice(0, 2000) : JSON.stringify(res1.data));
+                    await sock.sendMessage(remoteJid, { text: aiMsg }, { quoted: m });
+                    await react("✅");
 
-    const parsed1 = await safeParseXml(res1.data);
-    log('Parsed SesTokInfo:', parsed1);
+               } catch (e) {
+                    console.error("Gemini Error:", e.response ? e.response.data : e.message);
+                    
+                    let errMsg = '❌ AI is currently unavailable.';
+                    
+                    if (e.response) {
+                        if (e.response.status === 404) {
+                            errMsg = '❌ Model not found (Check URL/Model Name).';
+                        } else if (e.response.status === 400) {
+                            errMsg = '❌ Bad Request (Invalid API Key?).';
+                        } else if (e.response.status === 429) {
+                            errMsg = '⏳ Rate limit exceeded. Please try again later.';
+                        }
+                    }
+                    
+                    await sock.sendMessage(remoteJid, { text: errMsg }, { quoted: m });
+                    await react("❌");
+                }
+                break;
 
-    const sesInfo = parsed1?.response?.SesInfo || null;
-    const tokInfo = parsed1?.response?.TokInfo || null;
+            case 'short':
+            case 'shortlink':
+                if (!args[0]) return await sock.sendMessage(remoteJid, { text: '❌ Send a link! Ex: .short https://google.com' }, { quoted: m });
+                await react("⏳");
 
-    let cookie = buildCookieFromSetCookie(res1.headers['set-cookie']) || sesInfo || '';
-    log('Initial cookie built:', cookie);
+                try {
+                    const url = `https://tinyurl.com/api-create.php?url=${args[0]}`;
+                    const res = await axios.get(url);
+                    
+                    await sock.sendMessage(remoteJid, { text: `🔗 *Shortlink Created:*\n${res.data}` }, { quoted: m });
+                    await react("✅");
+                } catch (e) {
+                    await sock.sendMessage(remoteJid, { text: '❌ Failed to shorten URL.' }, { quoted: m });
+                    await react("❌");
+                }
+                break;
 
-    const headerToken = normalizeToken(res1.headers && (res1.headers['__requestverificationtoken'] || res1.headers['__requestverificationtoken2']));
-    const initialToken = tokInfo || headerToken || null;
-    log('Initial token candidates:', { tokInfo, headerToken, initialToken });
+            case 'ping':
+                await react("⏳");
+                await sock.sendMessage(remoteJid, { text: `╭──〔 🏓 PONG! 〕──\n┊ \n┊ Bot Online & Ready!\n┊ Speed: Fast ⚡\n┊\n╰──────────────────────` }, { quoted: m });
+                await react("✅");
+                break;
 
-    if (!cookie) log('WARNING: No cookie detected from Set-Cookie or SesInfo. This may cause login/session problems.');
-    if (!initialToken) log('WARNING: No initial token detected from SesTokInfo. This may cause password hashing issue.');
+            case 'info':
+                await react("⏳");
+                const stats = getSystemInfo();
+                exec('cat /sys/class/thermal/thermal_zone0/temp', async (err, stdout) => {
+                    let temp = 'N/A';
+                    if (!err) temp = (parseInt(stdout) / 1000).toFixed(1) + '°C';
+                    const infoMsg = `╭──〔 📊 STB STATUS 〕──\n┊\n┊ 🖥️ Platform : ${stats.platform} (${stats.arch})\n┊ 🌡️ Temp     : ${temp}\n┊ 🧠 RAM Used : ${stats.ramUsed}\n┊ 🆓 RAM Free : ${stats.ramFree}\n┊ ⏱️ Uptime   : ${stats.uptime}\n┊\n╰──────────────────────`;
+                    await sock.sendMessage(remoteJid, { text: infoMsg }, { quoted: m });
+                    await react("✅");
+                });
+                break;
 
-    log('2) LOGIN');
-    const passwordHash = b64(sha256(USER + b64(sha256(PASS)) + (initialToken || '')));
-    const loginPayload = `<?xml version="1.0" encoding="UTF-8"?><request><Username>${USER}</Username><Password>${passwordHash}</Password><password_type>4</password_type></request>`;
+            case 'weather':
+            case 'w':
+                if (!args.length) return await sock.sendMessage(remoteJid, { text: '❌ Input city name!' }, { quoted: m });
+                await react("⏳");
+                try {
+                    const apiKey = process.env.OPENWEATHER_API_KEY;
+                    if (!apiKey) return await react("❌");
+                    const { data } = await axios.get(`https://api.openweathermap.org/data/2.5/weather?q=${args.join(' ')}&appid=${apiKey}&units=metric&lang=en`);
+                    const cuacaMsg = `╭──〔 🌦️ WEATHER REPORT 〕──\n┊\n┊ 🏙️ City      : ${data.name}, ${data.sys.country}\n┊ 🌡️ Temp      : ${data.main.temp}°C\n┊ ☁️ Condition : ${data.weather[0].description}\n┊ 💧 Humidity  : ${data.main.humidity}%\n┊ 💨 Wind      : ${data.wind.speed} m/s\n┊\n╰──────────────────────`;
+                    await sock.sendMessage(remoteJid, { text: cuacaMsg }, { quoted: m });
+                    await react("✅");
+                } catch (e) {
+                    await sock.sendMessage(remoteJid, { text: '❌ City not found.' }, { quoted: m });
+                    await react("❌");
+                }
+                break;
 
-    log('Login payload snippet:', loginPayload.slice(0, 400));
+            case 'speedtest':
+            case 'speed':
+                await react("⏳");
+                await sock.sendMessage(remoteJid, { text: '🚀 *Speedtest running...*\n⏳ Please wait ±30s.' }, { quoted: m });
+                exec('speedtest --accept-license --accept-gdpr', async (error, stdout, stderr) => {
+                    if (error) {
+                        await sock.sendMessage(remoteJid, { text: '❌ Speedtest failed.' }, { quoted: m });
+                        return await react("❌");
+                    }
+                    await sock.sendMessage(remoteJid, { text: `╭──〔 🚀 SPEEDTEST RESULT 〕──\n┊\n${stdout.trim()}\n┊\n╰──────────────────────` }, { quoted: m });
+                    await react("✅");
+                });
+                break;
 
-    const loginHeaders = {
-      'Cookie': cookie || '',
-      '__RequestVerificationToken': initialToken || '',
-      'Content-Type': 'text/xml'
-    };
+            case 'myip':
+                await react("⏳");
+                try {
+                    const { data } = await axios.get('https://ipinfo.io/json');
+                    await sock.sendMessage(remoteJid, { text: `╭──〔 🌍 PUBLIC IP INFO 〕──\n┊\n┊ 📍 IP       : ${data.ip}\n┊ 🏢 ISP      : ${data.org}\n┊ 🏙️ Location : ${data.city}, ${data.country}\n┊\n╰──────────────────────` }, { quoted: m });
+                    await react("✅");
+                } catch (e) { await react("❌"); }
+                break;
 
-    const resLogin = await httpPost(`${BASE_URL}/user/login`, loginPayload, loginHeaders);
+            case 'restartoc':
+                if (!remoteJid.includes(config.ownerNumber.replace('@s.whatsapp.net', ''))) { await react("❌"); return await sock.sendMessage(remoteJid, { text: '⛔ Access Denied!' }, { quoted: m }); }
+                await react("⏳");
+                await sock.sendMessage(remoteJid, { text: '♻️ Restarting OpenClash...' }, { quoted: m });
+                exec('/etc/init.d/openclash restart', async (err) => {
+                    if (err) { await react("❌"); return await sock.sendMessage(remoteJid, { text: '❌ Failed.' }, { quoted: m }); }
+                    await sock.sendMessage(remoteJid, { text: `╭──〔 ✅ SUCCESS 〕──\n┊\n┊ OpenClash restarted!\n┊\n╰──────────────────────` }, { quoted: m });
+                    await react("✅");
+                });
+                break;
 
-    log('-- resLogin.headers --', resLogin.headers);
-    log('-- resLogin.data (first 2000 chars) --');
-    log(typeof resLogin.data === 'string' ? resLogin.data.slice(0, 2000) : JSON.stringify(resLogin.data));
+            case 'tiktok':
+            case 'tt':
+                if (!args[0]) return await sock.sendMessage(remoteJid, { text: '❌ Link required!' }, { quoted: m });
+                await react("⏳");
+                try {
+                    const { data } = await axios.get(`https://www.tikwm.com/api/?url=${args[0]}`);
+                    if (!data.data) { await react("❌"); return await sock.sendMessage(remoteJid, { text: '❌ Not found.' }, { quoted: m }); }
+                    const v = data.data;
+                    await sock.sendMessage(remoteJid, { video: { url: v.play }, caption: `╭──〔 🎵 TIKTOK 〕──\n┊ 📝 ${v.title}\n┊ 👤 ${v.author.nickname}\n╰────────────────` }, { quoted: m });
+                    await react("✅");
+                } catch (e) { await react("❌"); }
+                break;
 
-    const parsedLogin = await safeParseXml(resLogin.data);
-    log('Parsed login response:', parsedLogin);
+            case 'sms':
+            case 'inbox':
+                if (!remoteJid.includes(config.ownerNumber.replace('@s.whatsapp.net', ''))) {
+                    return await react("❌");
+                }
+                
+                await react("📩");
+                await sock.sendMessage(remoteJid, { text: '⏳ Fetching SMS from Huawei HiLink...' }, { quoted: m });
 
-    if (resLogin.headers && resLogin.headers['set-cookie']) {
-      const newCookie = buildCookieFromSetCookie(resLogin.headers['set-cookie']);
-      cookie = [newCookie, cookie].filter(Boolean).join('; ');
-      log('Updated cookie after login:', cookie);
+                try {
+                    const messages = await getHuaweiSMS();
+
+                    if (messages.length === 0) {
+                        const emptyMsg = `╭──〔 📩 MODEM INBOX 〕──
+┊
+┊ 📭 Inbox Kosong / Belum Login
+┊
+╰──────────────────────`;
+                        await sock.sendMessage(remoteJid, { text: emptyMsg }, { quoted: m });
+                        return await react("✅");
+                    }
+
+                    const limitMsg = messages.slice(0, 5);
+                    let smsList = '';
+
+                    limitMsg.forEach((sms, index) => {
+                        const date = sms.Date;
+                        const sender = sms.Phone;
+                        const content = sms.Content;
+                        smsList += `📨 *${sender}* (${date})\n${content}\n\n`;
+                    });
+
+                    const replyMsg = `╭──〔 📩 INBOX (${messages.length}) 〕──
+┊
+${smsList.trim()}
+┊
+╰──────────────────────`;
+
+                    await sock.sendMessage(remoteJid, { text: replyMsg }, { quoted: m });
+                    await react("✅");
+
+                } catch (e) {
+                    console.error(e);
+                    await sock.sendMessage(remoteJid, { text: `❌ Error: ${e.message}` }, { quoted: m });
+                    await react("❌");
+                }
+                break;
+        }
+
+    } catch (err) {
+        console.error('Handler Error:', err);
     }
-
-    const tokenFromLoginHeader = normalizeToken(resLogin.headers && (resLogin.headers['__requestverificationtoken'] || resLogin.headers['__requestverificationtoken2']));
-    const token = tokenFromLoginHeader || parsedLogin?.response?.TokInfo || initialToken;
-    log('Token chosen for SMS request:', { tokenFromLoginHeader, parsedLoginTokInfo: parsedLogin?.response?.TokInfo, token });
-
-    if (parsedLogin?.error) {
-      log('LOGIN ERROR:', parsedLogin.error);
-      if (parsedLogin.error.code !== '108006') {
-        log('Login failed – returning empty array.');
-        return [];
-      }
-    } else {
-      log('Login seems successful per response body.');
-    }
-
-    log('3) Fetch SMS');
-    const smsPayload = `<?xml version="1.0" encoding="UTF-8"?>\n<request>\n    <PageIndex>1</PageIndex>\n    <ReadCount>20</ReadCount>\n    <BoxType>1</BoxType>\n    <SortType>0</SortType>\n    <Ascending>0</Ascending>\n    <UnreadPreferred>0</UnreadPreferred>\n</request>`;
-
-    const smsHeaders = {
-      'Cookie': cookie || '',
-      '__RequestVerificationToken': token || '',
-      'Content-Type': 'text/xml; charset=UTF-8'
-    };
-
-    log('SMS request headers:', smsHeaders);
-    log('SMS request payload snippet:', smsPayload.slice(0, 400));
-
-    const resSms = await httpPost(`${BASE_URL}/sms/sms-list`, smsPayload, smsHeaders);
-
-    log('-- resSms.headers --', resSms.headers);
-    log('-- resSms.data (first 4000 chars) --');
-    log(typeof resSms.data === 'string' ? resSms.data.slice(0, 4000) : JSON.stringify(resSms.data));
-
-    const parsedSms = await safeParseXml(resSms.data);
-    log('Parsed SMS response:', parsedSms);
-
-    if (parsedSms?.error) {
-      log('SMS FETCH ERROR CODE:', parsedSms.error.code, parsedSms.error);
-      return [];
-    }
-
-    if (resSms.headers && resSms.headers['set-cookie']) {
-      const newCookie = buildCookieFromSetCookie(resSms.headers['set-cookie']);
-      cookie = [newCookie, cookie].filter(Boolean).join('; ');
-      log('Updated cookie after sms-list:', cookie);
-    }
-
-    let messages = [];
-    if (parsedSms?.response) {
-      if (parsedSms.response.Messages && parsedSms.response.Messages.Message) {
-        messages = parsedSms.response.Messages.Message;
-      } else if (parsedSms.response.Messages && Array.isArray(parsedSms.response.Messages)) {
-        messages = parsedSms.response.Messages;
-      }
-    }
-
-    if (messages && !Array.isArray(messages)) messages = [messages];
-
-    log('Successfully retrieved messages count:', messages ? messages.length : 0);
-    log('=== END: getHuaweiSMS ===');
-    return messages || [];
-
-  } catch (err) {
-    log('Fatal Error in getHuaweiSMS:', err.message, err.stack, err.response && { status: err.response.status, headers: err.response.headers, dataSnippet: err.response && typeof err.response.data === 'string' ? err.response.data.slice(0,1000) : err.response && err.response.data });
-    return [];
-  }
-}
-
-export default getHuaweiSMS;
+};
