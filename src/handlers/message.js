@@ -443,31 +443,29 @@ ${smsList.trim()}
       case "bw":
         await react("📊");
 
-        const cmd = `vnstat -i eth1 && echo "--------------------------------------------------" && vnstat -i eth1 -w`;
+        const iface = "br-lan";
 
         await sock.sendMessage(
           remoteJid,
-          { text: "⏳ Fetching bandwidth data..." },
+          { text: "⏳ Mengambil data trafik (br-lan)..." },
           { quoted: m }
         );
 
+        const cmd = `vnstat -i ${iface} && echo "--------------------------------------------------" && vnstat -i ${iface} -w`;
+
         exec(cmd, (err, stdout, stderr) => {
           if (err) {
-            exec("vnstat -i br-lan", (err2, stdout2) => {
-              const fallbackMsg = `⚠️ *Modem (eth1) No Data*\nMenampilkan Data LAN (br-lan):\n\n\`\`\`${
-                stdout2 || "Error reading database"
-              }\`\`\``;
-              sock.sendMessage(remoteJid, { text: fallbackMsg }, { quoted: m });
-              react("✅");
-            });
-            return;
+            const errMsg = `❌ *Gagal mengambil data br-lan*\n\nError:\n\`\`\`${
+              stderr || err.message
+            }\`\`\``;
+            return sock.sendMessage(remoteJid, { text: errMsg }, { quoted: m });
           }
 
           const output = stdout.trim();
 
-          const msg = `╭──〔 📊 TRAFFIC MONITOR 〕──
+          const msg = `╭──〔 📊 TRAFFIC LAN/WIFI 〕──
 ┊
-┊ *Interface: ETH1 (Modem)*
+┊ *Interface:* BR-LAN (Total Client)
 ┊
 \`\`\`${output}\`\`\`
 ┊
