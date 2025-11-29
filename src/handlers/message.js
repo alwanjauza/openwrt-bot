@@ -18,7 +18,7 @@ export default async (sock, m, chatUpdate) => {
         const args = body.trim().split(/ +/).slice(1);
         const remoteJid = m.key.remoteJid;
 
-        if (isCmd) console.log(`[CMD] ${command} dari ${remoteJid}`);
+        if (isCmd) console.log(`[CMD] ${command} from ${remoteJid}`);
 
         const react = async (emoji) => {
             await sock.sendMessage(remoteJid, { 
@@ -29,7 +29,7 @@ export default async (sock, m, chatUpdate) => {
         switch (command) {
             case 'menu':
                 await react("⏳");
-                const menuMsg = `╭──〔 🤖 DASHBOARD BOT 〕──
+                const menuMsg = `╭──〔 🤖 BOT DASHBOARD 〕──
 ┊
 ┊ 📡 *NETWORK*
 ┊ • ${prefix}speedtest
@@ -40,7 +40,8 @@ export default async (sock, m, chatUpdate) => {
 ┊ • ${prefix}info
 ┊ • ${prefix}ping
 ┊
-┊ 📥 *DOWNLOADER*
+┊ 🌍 *TOOLS*
+┊ • ${prefix}weather <city>
 ┊ • ${prefix}tiktok <link>
 ┊
 ╰──────────────────────`;
@@ -62,20 +63,18 @@ export default async (sock, m, chatUpdate) => {
 
             case 'info':
                 await react("⏳");
-                // Ambil data sistem sync
                 const stats = getSystemInfo();
                 
-                // Ambil suhu via exec (async)
                 exec('cat /sys/class/thermal/thermal_zone0/temp', async (err, stdout) => {
                     let temp = 'N/A';
                     if (!err) {
                         temp = (parseInt(stdout) / 1000).toFixed(1) + '°C';
                     }
 
-                    const infoMsg = `╭──〔 📊 STATUS STB 〕──
+                    const infoMsg = `╭──〔 📊 STB STATUS 〕──
 ┊
 ┊ 🖥️ Platform : ${stats.platform} (${stats.arch})
-┊ 🌡️ Suhu     : ${temp}
+┊ 🌡️ Temp     : ${temp}
 ┊ 🧠 RAM Used : ${stats.ramUsed}
 ┊ 🆓 RAM Free : ${stats.ramFree}
 ┊ ⏱️ Uptime   : ${stats.uptime}
@@ -87,22 +86,65 @@ export default async (sock, m, chatUpdate) => {
                 });
                 break;
 
+            case 'weather':
+            case 'w':
+                if (!args.length) return await sock.sendMessage(remoteJid, { text: '❌ Input city name! Ex: .weather London' }, { quoted: m });
+                
+                await react("⏳");
+
+                try {
+                    const cityInput = args.join(' ').toLowerCase();
+                    const apiKey = process.env.OPENWEATHER_API_KEY;
+
+                    if (!apiKey) {
+                        await sock.sendMessage(remoteJid, { text: '❌ OpenWeather API Key not set in .env!' }, { quoted: m });
+                        return await react("❌");
+                    }
+
+                    const apiUrl = `https://api.openweathermap.org/data/2.5/weather?q=${cityInput}&appid=${apiKey}&units=metric&lang=en`;
+                    const { data } = await axios.get(apiUrl);
+
+                    const cuacaMsg = `╭──〔 🌦️ WEATHER REPORT 〕──
+┊
+┊ 🏙️ City      : ${data.name}, ${data.sys.country}
+┊ 🌡️ Temp      : ${data.main.temp}°C
+┊ 🌡️ Feels Like: ${data.main.feels_like}°C
+┊ ☁️ Condition : ${data.weather[0].description}
+┊ 💧 Humidity  : ${data.main.humidity}%
+┊ 💨 Wind      : ${data.wind.speed} m/s
+┊
+╰──────────────────────`;
+
+                    await sock.sendMessage(remoteJid, { text: cuacaMsg }, { quoted: m });
+                    await react("✅");
+
+                } catch (e) {
+                    console.error(e);
+                    if (e.response && e.response.status === 404) {
+                        await sock.sendMessage(remoteJid, { text: `❌ City *${args.join(' ')}* not found.` }, { quoted: m });
+                    } else {
+                        await sock.sendMessage(remoteJid, { text: '❌ Error fetching weather data.' }, { quoted: m });
+                    }
+                    await react("❌");
+                }
+                break;
+
             case 'speedtest':
             case 'speed':
                 await react("⏳");
-                await sock.sendMessage(remoteJid, { text: '🚀 *Speedtest sedang berjalan...*\n⏳ Mohon tunggu ±30 detik.' }, { quoted: m });
+                await sock.sendMessage(remoteJid, { text: '🚀 *Speedtest running...*\n⏳ Please wait ±30 seconds.' }, { quoted: m });
 
                 exec('speedtest --accept-license --accept-gdpr', async (error, stdout, stderr) => {
                     if (error) {
                         console.error(`Exec error: ${error}`);
-                        await sock.sendMessage(remoteJid, { text: '❌ Gagal menjalankan speedtest.' }, { quoted: m });
+                        await sock.sendMessage(remoteJid, { text: '❌ Failed to execute speedtest. Ensure package is installed.' }, { quoted: m });
                         return await react("❌");
                     }
 
                     const output = stdout + (stderr ? `\nNote: ${stderr}` : '');
                     const cleanOutput = output.trim();
 
-                    const speedMsg = `╭──〔 🚀 HASIL SPEEDTEST 〕──
+                    const speedMsg = `╭──〔 🚀 SPEEDTEST RESULT 〕──
 ┊
 ${cleanOutput}
 ┊
@@ -118,17 +160,17 @@ ${cleanOutput}
                 try {
                     const res = await axios.get('https://ipinfo.io/json');
                     const info = res.data;
-                    const ipMsg = `╭──〔 🌍 IP PUBLIC INFO 〕──
+                    const ipMsg = `╭──〔 🌍 PUBLIC IP INFO 〕──
 ┊
 ┊ 📍 IP       : ${info.ip}
 ┊ 🏢 ISP      : ${info.org}
-┊ 🏙️ Lokasi   : ${info.city}, ${info.country}
+┊ 🏙️ Location : ${info.city}, ${info.country}
 ┊
 ╰──────────────────────`;
                     await sock.sendMessage(remoteJid, { text: ipMsg }, { quoted: m });
                     await react("✅");
                 } catch (e) {
-                    await sock.sendMessage(remoteJid, { text: '❌ Gagal cek IP.' }, { quoted: m });
+                    await sock.sendMessage(remoteJid, { text: '❌ Failed to check IP.' }, { quoted: m });
                     await react("❌");
                 }
                 break;
@@ -139,17 +181,17 @@ ${cleanOutput}
                 }
 
                 await react("⏳");
-                await sock.sendMessage(remoteJid, { text: '♻️ Sedang merestart OpenClash...' }, { quoted: m });
+                await sock.sendMessage(remoteJid, { text: '♻️ Restarting OpenClash service...' }, { quoted: m });
                 
                 exec('/etc/init.d/openclash restart', async (err, stdout) => {
                     if (err) {
-                        await sock.sendMessage(remoteJid, { text: '❌ Gagal restart OpenClash.' }, { quoted: m });
+                        await sock.sendMessage(remoteJid, { text: '❌ Failed to restart OpenClash.' }, { quoted: m });
                         return await react("❌");
                     }
-                    const ocMsg = `╭──〔 ✅ SUKSES 〕──
+                    const ocMsg = `╭──〔 ✅ SUCCESS 〕──
 ┊
-┊ OpenClash berhasil direstart!
-┊ Cek koneksi kembali.
+┊ OpenClash restarted successfully!
+┊ Please check your connection.
 ┊
 ╰──────────────────────`;
                     await sock.sendMessage(remoteJid, { text: ocMsg }, { quoted: m });
@@ -159,7 +201,7 @@ ${cleanOutput}
 
             case 'tiktok':
             case 'tt':
-                if (!args[0]) return await sock.sendMessage(remoteJid, { text: '❌ Masukkan link TikTok!' }, { quoted: m });
+                if (!args[0]) return await sock.sendMessage(remoteJid, { text: '❌ Please provide TikTok link!' }, { quoted: m });
                 await react("⏳");
                 
                 try {
@@ -168,13 +210,13 @@ ${cleanOutput}
                     const data = res.data.data;
                     
                     if (!data) {
-                        await sock.sendMessage(remoteJid, { text: '❌ Video tidak ditemukan/Private.' }, { quoted: m });
+                        await sock.sendMessage(remoteJid, { text: '❌ Video not found/Private.' }, { quoted: m });
                         return await react("❌");
                     }
 
                     const ttMsg = `╭──〔 🎵 TIKTOK NO WM 〕──
 ┊
-┊ 📝 Judul  : ${data.title}
+┊ 📝 Title  : ${data.title}
 ┊ 👤 Author : ${data.author.nickname}
 ┊ ▶️ Plays  : ${data.play_count}
 ┊
@@ -188,7 +230,7 @@ ${cleanOutput}
                     
                 } catch (e) {
                     console.log(e);
-                    await sock.sendMessage(remoteJid, { text: '❌ Gagal download video.' }, { quoted: m });
+                    await sock.sendMessage(remoteJid, { text: '❌ Failed to download video.' }, { quoted: m });
                     await react("❌");
                 }
                 break;
