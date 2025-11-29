@@ -109,6 +109,7 @@ This project uses a **Pull-based CI/CD** suitable for devices behind NAT (no Pub
 | `.restartoc`    | Restart OpenClash Service                                   |
 | `.myip`            | Check Public IP & ISP                       |
 | `.tiktok <link>` | Download TikTok video (No WM)                           |
+| `.weather <city>` | Get current weather at that city                           |
 
 ## ⚠️ Disclaimer
 
