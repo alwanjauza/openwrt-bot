@@ -177,7 +177,8 @@ ${cleanOutput}
 
             case 'restartoc':
                 if (!remoteJid.includes(config.ownerNumber.replace('@s.whatsapp.net', ''))) {
-                   return await react("❌");
+                   await react("❌");
+                   return await sock.sendMessage(remoteJid, { text: '⛔ You do not have access to perform this command!' }, { quoted: m });
                 }
 
                 await react("⏳");

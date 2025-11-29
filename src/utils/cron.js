@@ -1,5 +1,6 @@
 import cron from 'node-cron';
 import axios from 'axios';
+import { exec } from 'child_process';
 import 'dotenv/config';
 
 async function sendDailyQuote(sock, targetNumber) {
@@ -26,8 +27,24 @@ async function sendDailyQuote(sock, targetNumber) {
     }
 }
 
+async function clearUpdateLog(sock) {
+    const ownerNumber = process.env.OWNER_NUMBER + '@s.whatsapp.net';
+    
+    exec('echo "" > /root/wabot/update.log', async (err) => {
+        if (err) {
+            console.error("❌ Failed to clean logs via Cron");
+        } else {
+            console.log("🧹 Logs cleaned successfully via Cron");
+            
+            await sock.sendMessage(ownerNumber, { 
+                text: "🧹 *SYSTEM NOTICE*\n\nWeekly maintenance complete.\nUpdate logs have been cleared successfully."
+            });
+        }
+    });
+}
+
 export const initCron = (sock) => {
-    console.log("⏰ Sistem Cronjob Aktif (Jadwal: 06:00 WIB)");
+    console.log("⏰ Cron Jobs Initialized");
     
     cron.schedule("0 6 * * *", async () => {
         const targets = [
@@ -40,6 +57,14 @@ export const initCron = (sock) => {
             await sendDailyQuote(sock, number);
             await new Promise(r => setTimeout(r, 5000));
         }
+    }, {
+        scheduled: true,
+        timezone: "Asia/Jakarta"
+    });
+
+    cron.schedule("0 0 * * 1", async () => {
+        console.log("🔄 Running Weekly Log Cleaner...");
+        await clearUpdateLog(sock);
     }, {
         scheduled: true,
         timezone: "Asia/Jakarta"
