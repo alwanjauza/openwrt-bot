@@ -44,10 +44,15 @@ export const getHuaweiSMS = async () => {
         token = data.response.TokInfo;
 
         console.log("4. Fetch SMS...");
-        const smsPayload = `<?xml version="1.0" encoding="UTF-8"?><request><PageIndex>1</PageIndex><ReadCount>20</ReadCount><BoxType>1</BoxType></request>`;
+        const smsPayload = `<?xml version="1.0" encoding="UTF-8"?><request><PageIndex>1</PageIndex><ReadCount>20</ReadCount><BoxType>1</BoxType><SortType>0</SortType><Ascending>0</Ascending><UnreadPreferred>0</UnreadPreferred></request>`;
 
         res = await axios.post(`${BASE_URL}/sms/sms-list`, smsPayload, {
-            headers: { 'Cookie': cookie, '__RequestVerificationToken': token, 'Content-Type': 'text/xml' }
+            headers: { 
+                'Cookie': cookie, 
+                '__RequestVerificationToken': token, 
+                'Content-Type': 'text/xml',
+                'X-Requested-With': 'XMLHttpRequest'
+            }
         });
 
         const result = await parser.parseStringPromise(res.data);
@@ -58,10 +63,12 @@ export const getHuaweiSMS = async () => {
         }
 
         let messages = [];
-        if (result.response && result.response.Messages && result.response.Messages.Message) {
-            messages = result.response.Messages.Message;
-        } else if (result.response && result.response.Messages && Array.isArray(result.response.Messages)) {
-            messages = result.response.Messages;
+        if (result.response) {
+            if (result.response.Messages && result.response.Messages.Message) {
+                messages = result.response.Messages.Message;
+            } else if (result.response.Messages && Array.isArray(result.response.Messages)) {
+                messages = result.response.Messages;
+            }
         }
 
         if (messages && !Array.isArray(messages)) messages = [messages];
