@@ -391,7 +391,7 @@ ${answer.trim()}
           const sorted = [...messages].sort((a, b) => {
             const da = new Date(safe(a, "Date", "date"));
             const db = new Date(safe(b, "Date", "date"));
-            return db - da; 
+            return db - da;
           });
 
           const recent5 = sorted.slice(0, 5);
@@ -436,6 +436,48 @@ ${smsList.trim()}
           );
           await react("❌");
         }
+        break;
+
+      case "bandwidth":
+      case "usage":
+      case "bw":
+        await react("📊");
+
+        const iface = "eth1";
+
+        await sock.sendMessage(
+          remoteJid,
+          { text: "⏳ Mengambil data penggunaan..." },
+          { quoted: m }
+        );
+
+        exec(
+          `vnstat -i ${iface} && echo "--------------------------------------------------" && vnstat -i ${iface} -w`,
+          async (err, stdout, stderr) => {
+            if (err) {
+              console.error("Vnstat Error:", err);
+              await sock.sendMessage(
+                remoteJid,
+                { text: "❌ Gagal akses vnstat. Pastikan sudah terinstall." },
+                { quoted: m }
+              );
+              return await react("❌");
+            }
+
+            const output = stdout.trim();
+
+            const msg = `╭──〔 📊 TRAFFIC MONITOR 〕──
+┊
+┊ *Interface:* ${iface.toUpperCase()}
+┊
+\`\`\`${output}\`\`\`
+┊
+╰──────────────────────`;
+
+            await sock.sendMessage(remoteJid, { text: msg }, { quoted: m });
+            await react("✅");
+          }
+        );
         break;
     }
   } catch (err) {
