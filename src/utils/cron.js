@@ -3,6 +3,8 @@ import axios from 'axios';
 import { exec } from 'child_process';
 import 'dotenv/config';
 
+let tasks = [];
+
 async function sendDailyQuote(sock, targetNumber) {
     try {
         if (!targetNumber.endsWith('@s.whatsapp.net')) {
@@ -14,59 +16,55 @@ async function sendDailyQuote(sock, targetNumber) {
         });
 
         const quote = res.data[0];
-        const message = `╭──〔 🌄 QUOTE PAGI 〕──
+        const message = `╭──〔 🌄 MORNING QUOTE 〕──
 ┊ 💬 *${quote.quote}*
 ┊ ✍️ _${quote.author}_
 ╰──────────────────────`;
 
         await sock.sendMessage(targetNumber, { text: message });
-        console.log(`✅ Quote terkirim ke ${targetNumber}`);
+        console.log(`✅ Quote sent to ${targetNumber}`);
 
     } catch (error) {
-        console.error(`❌ Gagal kirim quote ke ${targetNumber}:`, error?.message);
+        console.error(`❌ Failed to send quote to ${targetNumber}:`, error?.message);
     }
 }
 
 async function clearUpdateLog(sock) {
     const ownerNumber = process.env.OWNER_NUMBER + '@s.whatsapp.net';
-    
     exec('echo "" > /root/wabot/update.log', async (err) => {
-        if (err) {
-            console.error("❌ Failed to clean logs via Cron");
-        } else {
-            console.log("🧹 Logs cleaned successfully via Cron");
-            
-            await sock.sendMessage(ownerNumber, { 
-                text: "🧹 *SYSTEM NOTICE*\n\nWeekly maintenance complete.\nUpdate logs have been cleared successfully."
-            });
+        if (!err) {
+            console.log("🧹 Logs cleaned successfully");
+            await sock.sendMessage(ownerNumber, { text: "🧹 Weekly logs cleared." });
         }
     });
 }
 
 export const initCron = (sock) => {
-    console.log("⏰ Cron Jobs Initialized");
+    if (tasks.length > 0) {
+        console.log("♻️ Stopping old cron jobs to prevent duplication...");
+        tasks.forEach(task => task.stop());
+        tasks = []; 
+    }
+
+    console.log("⏰ Initializing New Cron Jobs...");
     
-    cron.schedule("0 6 * * *", async () => {
+    const task1 = cron.schedule("2 6 * * *", async () => {
         const targets = [
             process.env.OWNER_NUMBER,
+            process.env.PARTNER_NUMBER,
         ].filter(Boolean);
 
-        console.log("🔄 Menjalankan Cronjob Pagi...");
-        
+        console.log("🔄 Running Daily Quote Job...");
         for (const number of targets) {
             await sendDailyQuote(sock, number);
             await new Promise(r => setTimeout(r, 5000));
         }
-    }, {
-        scheduled: true,
-        timezone: "Asia/Jakarta"
-    });
+    }, { scheduled: true, timezone: "Asia/Jakarta" });
 
-    cron.schedule("0 0 * * 1", async () => {
+    const task2 = cron.schedule("0 0 * * 1", async () => {
         console.log("🔄 Running Weekly Log Cleaner...");
         await clearUpdateLog(sock);
-    }, {
-        scheduled: true,
-        timezone: "Asia/Jakarta"
-    });
+    }, { scheduled: true, timezone: "Asia/Jakarta" });
+
+    tasks.push(task1, task2);
 };
