@@ -45,6 +45,8 @@ export default async (sock, m, chatUpdate) => {
 ┊ 📡 *NETWORK*
 ┊ • ${prefix}speedtest
 ┊ • ${prefix}myip
+┊ • ${prefix}restartadg
+┊ • ${prefix}restartcf
 ┊ • ${prefix}restartoc
 ┊
 ┊ 📱 *SYSTEM*
