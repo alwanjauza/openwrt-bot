@@ -172,6 +172,21 @@ ${answer.trim()}
         await react("✅");
         break;
 
+      // case "info":
+      //   await react("⏳");
+      //   const stats = getSystemInfo();
+      //   exec(
+      //     "cat /sys/class/thermal/thermal_zone0/temp",
+      //     async (err, stdout) => {
+      //       let temp = "N/A";
+      //       if (!err) temp = (parseInt(stdout) / 1000).toFixed(1) + "°C";
+      //       const infoMsg = `╭──〔 📊 STB STATUS 〕──\n┊\n┊ 🖥️ Platform : ${stats.platform} (${stats.arch})\n┊ 🌡️ Temp     : ${temp}\n┊ 🧠 RAM Used : ${stats.ramUsed}\n┊ 🆓 RAM Free : ${stats.ramFree}\n┊ ⏱️ Uptime   : ${stats.uptime}\n┊\n╰──────────────────────`;
+      //       await sock.sendMessage(remoteJid, { text: infoMsg }, { quoted: m });
+      //       await react("✅");
+      //     }
+      //   );
+      //   break;
+
       case "info":
         await react("⏳");
         const stats = getSystemInfo();
@@ -180,7 +195,7 @@ ${answer.trim()}
           async (err, stdout) => {
             let temp = "N/A";
             if (!err) temp = (parseInt(stdout) / 1000).toFixed(1) + "°C";
-            const infoMsg = `╭──〔 📊 STB STATUS 〕──\n┊\n┊ 🖥️ Platform : ${stats.platform} (${stats.arch})\n┊ 🌡️ Temp     : ${temp}\n┊ 🧠 RAM Used : ${stats.ramUsed}\n┊ 🆓 RAM Free : ${stats.ramFree}\n┊ ⏱️ Uptime   : ${stats.uptime}\n┊\n╰──────────────────────`;
+            const infoMsg = `╭──〔 📊 STB ARMBIAN STATUS 〕──\n┊\n┊ 🖥️ Platform : ${stats.platform} (${stats.arch})\n┊ 🌡️ Temp     : ${temp}\n┊ 🧠 RAM Used : ${stats.ramUsed}\n┊ 🆓 RAM Free : ${stats.ramFree}\n┊ ⏱️ Uptime   : ${stats.uptime}\n┊\n╰──────────────────────`;
             await sock.sendMessage(remoteJid, { text: infoMsg }, { quoted: m });
             await react("✅");
           }
@@ -263,6 +278,60 @@ ${answer.trim()}
         } catch (e) {
           await react("❌");
         }
+        break;
+
+      case "restartadg":
+        if (
+          !remoteJid.includes(config.ownerNumber.replace("@s.whatsapp.net", ""))
+        )
+          return await react("❌");
+        await react("⏳");
+        await sock.sendMessage(
+          remoteJid,
+          { text: "♻️ Restarting AdGuard Home..." },
+          { quoted: m }
+        );
+        exec("systemctl restart AdGuardHome", async (err) => {
+          if (err)
+            return await sock.sendMessage(
+              remoteJid,
+              { text: "❌ Failed." },
+              { quoted: m }
+            );
+          await sock.sendMessage(
+            remoteJid,
+            { text: "✅ AdGuard Home Restarted!" },
+            { quoted: m }
+          );
+          await react("✅");
+        });
+        break;
+
+      case "restartcf":
+        if (
+          !remoteJid.includes(config.ownerNumber.replace("@s.whatsapp.net", ""))
+        )
+          return await react("❌");
+        await react("⏳");
+        await sock.sendMessage(
+          remoteJid,
+          { text: "♻️ Restarting Cloudflare Tunnel..." },
+          { quoted: m }
+        );
+        exec("systemctl restart cloudflared", async (err) => {
+          if (err)
+            return await sock.sendMessage(
+              remoteJid,
+              { text: "❌ Failed." },
+              { quoted: m }
+            );
+          await sock.sendMessage(
+            remoteJid,
+            { text: "✅ Cloudflare Tunnel Restarted!" },
+            { quoted: m }
+          );
+          await react("✅");
+        });
         break;
 
       case "restartoc":
@@ -439,43 +508,77 @@ ${smsList.trim()}
         }
         break;
 
+      //       case "bandwidth":
+      //       case "usage":
+      //       case "bw":
+      //         await react("📊");
+
+      //         const iface = "br-lan";
+
+      //         await sock.sendMessage(
+      //           remoteJid,
+      //           { text: "⏳ Mengambil data trafik (br-lan)..." },
+      //           { quoted: m }
+      //         );
+
+      //         const cmd = `vnstat -i ${iface}; echo "--------------------------------------------------"; vnstat -i ${iface} -w || true`;
+
+      //         exec(cmd, (err, stdout, stderr) => {
+      //           if (stdout && stdout.trim().length > 0) {
+      //             const output = stdout.trim();
+
+      //             const msg = `╭──〔 📊 TRAFFIC LAN/WIFI 〕──
+      // ┊
+      // ┊ *Interface:* BR-LAN (Total Client)
+      // ┊
+      // \`\`\`${output}\`\`\`
+      // ┊
+      // ╰──────────────────────`;
+
+      //             sock.sendMessage(remoteJid, { text: msg }, { quoted: m });
+      //             react("✅");
+      //           } else {
+      //             // Kalau benar-benar kosong barulah kita bilang error
+      //             const errMsg = `❌ *Gagal mengambil data br-lan*\n\nError:\n\`\`\`${
+      //               stderr || err?.message || "Unknown Error"
+      //             }\`\`\``;
+      //             sock.sendMessage(remoteJid, { text: errMsg }, { quoted: m });
+      //             react("❌");
+      //           }
+      //         });
+      //         break;
+
       case "bandwidth":
       case "usage":
       case "bw":
         await react("📊");
+        const ifaceCmd = "ip route | grep default | awk '{print $5}'";
 
-        const iface = "br-lan";
+        exec(ifaceCmd, (err, ifaceName) => {
+          const iface = ifaceName.trim() || "eth0";
+          sock.sendMessage(
+            remoteJid,
+            { text: `⏳ Mengambil data trafik (${iface})...` },
+            { quoted: m }
+          );
 
-        await sock.sendMessage(
-          remoteJid,
-          { text: "⏳ Mengambil data trafik (br-lan)..." },
-          { quoted: m }
-        );
-
-        const cmd = `vnstat -i ${iface}; echo "--------------------------------------------------"; vnstat -i ${iface} -w || true`;
-
-        exec(cmd, (err, stdout, stderr) => {
-          if (stdout && stdout.trim().length > 0) {
-            const output = stdout.trim();
-
-            const msg = `╭──〔 📊 TRAFFIC LAN/WIFI 〕──
-┊
-┊ *Interface:* BR-LAN (Total Client)
-┊
-\`\`\`${output}\`\`\`
-┊
-╰──────────────────────`;
-
-            sock.sendMessage(remoteJid, { text: msg }, { quoted: m });
-            react("✅");
-          } else {
-            // Kalau benar-benar kosong barulah kita bilang error
-            const errMsg = `❌ *Gagal mengambil data br-lan*\n\nError:\n\`\`\`${
-              stderr || err?.message || "Unknown Error"
-            }\`\`\``;
-            sock.sendMessage(remoteJid, { text: errMsg }, { quoted: m });
-            react("❌");
-          }
+          const cmd = `vnstat -i ${iface}; echo "--- Weekly ---"; vnstat -i ${iface} -w`;
+          exec(cmd, (err, stdout) => {
+            if (stdout) {
+              const msg = `╭──〔 📊 TRAFFIC INFO 〕──\n┊\n┊ *Interface:* ${iface}\n\`\`\`${stdout.trim()}\`\`\`\n┊\n╰──────────────────────`;
+              sock.sendMessage(remoteJid, { text: msg }, { quoted: m });
+              react("✅");
+            } else {
+              sock.sendMessage(
+                remoteJid,
+                {
+                  text: "❌ Vnstat belum terinstall atau interface tidak ditemukan.",
+                },
+                { quoted: m }
+              );
+              react("❌");
+            }
+          });
         });
         break;
     }
