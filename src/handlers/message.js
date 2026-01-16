@@ -193,18 +193,60 @@ ${answer.trim()}
       //   break;
 
       case "info":
-        await react("⏳");
-        const stats = getSystemInfo();
-        exec(
-          "cat /sys/class/thermal/thermal_zone0/temp",
-          async (err, stdout) => {
-            let temp = "N/A";
-            if (!err) temp = (parseInt(stdout) / 1000).toFixed(1) + "°C";
-            const infoMsg = `╭──〔 📊 STB ARMBIAN STATUS 〕──\n┊\n┊ 🖥️ Platform : ${stats.platform} (${stats.arch})\n┊ 🌡️ Temp     : ${temp}\n┊ 🧠 RAM Used : ${stats.ramUsed}\n┊ 🆓 RAM Free : ${stats.ramFree}\n┊ ⏱️ Uptime   : ${stats.uptime}\n┊\n╰──────────────────────`;
-            await sock.sendMessage(remoteJid, { text: infoMsg }, { quoted: m });
-            await react("✅");
+      case "status":
+        await react("📊");
+        const cmd =
+          "cat /sys/class/thermal/thermal_zone0/temp && uptime -p && uptime | awk -F'load average:' '{print $2}' && free -m && df -h / && df -h /mnt/data";
+
+        exec(cmd, async (err, stdout) => {
+          if (err)
+            return sock.sendMessage(remoteJid, {
+              text: "❌ Gagal mengambil info sistem.",
+            });
+
+          const output = stdout.split("\n");
+
+          const temp = (parseInt(output[0]) / 1000).toFixed(1) + "°C";
+
+          const uptimeP = output[1].replace("up ", "");
+
+          const loadAvg = output[2].trim();
+
+          const ramData = output[3].split(/\s+/);
+          const ramTotal = (ramData[1] / 1024).toFixed(1) + "GB";
+          const ramUsed = (ramData[2] / 1024).toFixed(1) + "GB";
+          const ramPercent = ((ramData[2] / ramData[1]) * 100).toFixed(1) + "%";
+
+          const diskInt = output[4].split(/\s+/);
+          const intFree = diskInt[3];
+
+          const diskExt = output[5].split(/\s+/);
+          const extTotal = diskExt[1];
+          const extUsed = diskExt[2];
+          const extFree = diskExt[3];
+          const extPercent = diskExt[4];
+
+          const infoMsg = `╭──〔 🖥️ STB SYSTEM INFO 〕──
+┊
+┊ 🌡️ *CPU Temp* : ${temp}
+┊ ⏱️ *Uptime* : ${uptimeP}
+┊ 📈 *Load Avg* : ${loadAvg}
+┊
+┊ 🧠 *RAM Usage* : ${ramUsed} / ${ramTotal} (${ramPercent})
+┊ 💾 *Internal* : ${intFree} Free
+┊ 📂 *HDD 1TB* : ${extUsed} / ${extTotal} (${extPercent})
+┊ 🆓 *HDD Free* : ${extFree}
+┊
+┊ 🌐 *IP Local* : ${
+            require("os").networkInterfaces().eth0?.[0]?.address || "N/A"
           }
-        );
+┊ 🤖 *Status* : Running Smoothly
+┊
+╰──────────────────────`;
+
+          await sock.sendMessage(remoteJid, { text: infoMsg }, { quoted: m });
+          await react("✅");
+        });
         break;
 
       case "weather":
