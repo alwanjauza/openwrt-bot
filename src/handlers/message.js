@@ -1,5 +1,6 @@
 import { getSystemInfo } from "../utils/sysinfo.js";
 import { exec } from "child_process";
+import os from "os";
 import axios from "axios";
 import config from "../config.js";
 import { getHuaweiSMS } from "../utils/huawei.js";
@@ -212,19 +213,31 @@ ${answer.trim()}
 
           const loadAvg = output[2].trim();
 
-          const ramData = output[3].split(/\s+/);
-          const ramTotal = (ramData[1] / 1024).toFixed(1) + "GB";
-          const ramUsed = (ramData[2] / 1024).toFixed(1) + "GB";
-          const ramPercent = ((ramData[2] / ramData[1]) * 100).toFixed(1) + "%";
+          const ramLines = output[3].trim().split(/\s+/);
+          const ramTotal = (parseInt(ramLines[1]) / 1024).toFixed(1) + "GB";
+          const ramUsed = (parseInt(ramLines[2]) / 1024).toFixed(1) + "GB";
+          const ramPercent =
+            ((parseInt(ramLines[2]) / parseInt(ramLines[1])) * 100).toFixed(1) +
+            "%";
 
-          const diskInt = output[4].split(/\s+/);
+          const diskInt = output[4].trim().split(/\s+/);
           const intFree = diskInt[3];
 
-          const diskExt = output[5].split(/\s+/);
-          const extTotal = diskExt[1];
-          const extUsed = diskExt[2];
-          const extFree = diskExt[3];
-          const extPercent = diskExt[4];
+          let hddInfo = "N/A";
+          if (output[5]) {
+            const diskExt = output[5].trim().split(/\s+/);
+            hddInfo = `${diskExt[2]} / ${diskExt[1]} (${diskExt[4]})`;
+          }
+
+          const nets = os.networkInterfaces();
+          let ipLocal = "127.0.0.1";
+          for (const name of Object.keys(nets)) {
+            for (const net of nets[name]) {
+              if (net.family === "IPv4" && !net.internal) {
+                ipLocal = net.address;
+              }
+            }
+          }
 
           const infoMsg = `╭──〔 🖥️ STB SYSTEM INFO 〕──
 ┊
@@ -234,12 +247,9 @@ ${answer.trim()}
 ┊
 ┊ 🧠 *RAM Usage* : ${ramUsed} / ${ramTotal} (${ramPercent})
 ┊ 💾 *Internal* : ${intFree} Free
-┊ 📂 *HDD 1TB* : ${extUsed} / ${extTotal} (${extPercent})
-┊ 🆓 *HDD Free* : ${extFree}
+┊ 📂 *HDD 1TB* : ${hddInfo}
 ┊
-┊ 🌐 *IP Local* : ${
-            require("os").networkInterfaces().eth0?.[0]?.address || "N/A"
-          }
+┊ 🌐 *IP Local* : ${ipLocal}
 ┊ 🤖 *Status* : Running Smoothly
 ┊
 ╰──────────────────────`;
