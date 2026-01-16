@@ -197,7 +197,7 @@ ${answer.trim()}
       case "status":
         await react("📊");
         const cmd =
-          "cat /sys/class/thermal/thermal_zone0/temp && uptime -p && uptime | awk -F'load average:' '{print $2}' && free -m && df -h / && df -h /mnt/data";
+          "cat /sys/class/thermal/thermal_zone0/temp && uptime -p && uptime | awk -F'load average:' '{print $2}' && free -m | grep Mem: && df -h / | grep / && df -h /mnt/data | grep /";
 
         exec(cmd, async (err, stdout) => {
           if (err)
@@ -205,7 +205,9 @@ ${answer.trim()}
               text: "❌ Gagal mengambil info sistem.",
             });
 
-          const output = stdout.split("\n");
+          const output = stdout
+            .split("\n")
+            .filter((line) => line.trim() !== "");
 
           const temp = (parseInt(output[0]) / 1000).toFixed(1) + "°C";
 
@@ -214,11 +216,11 @@ ${answer.trim()}
           const loadAvg = output[2].trim();
 
           const ramLines = output[3].trim().split(/\s+/);
-          const ramTotal = (parseInt(ramLines[1]) / 1024).toFixed(1) + "GB";
-          const ramUsed = (parseInt(ramLines[2]) / 1024).toFixed(1) + "GB";
-          const ramPercent =
-            ((parseInt(ramLines[2]) / parseInt(ramLines[1])) * 100).toFixed(1) +
-            "%";
+          const rTotalNum = parseInt(ramLines[1]);
+          const rUsedNum = parseInt(ramLines[2]);
+          const ramTotal = (rTotalNum / 1024).toFixed(1) + "GB";
+          const ramUsed = (rUsedNum / 1024).toFixed(1) + "GB";
+          const ramPercent = ((rUsedNum / rTotalNum) * 100).toFixed(1) + "%";
 
           const diskInt = output[4].trim().split(/\s+/);
           const intFree = diskInt[3];
@@ -231,10 +233,14 @@ ${answer.trim()}
 
           const nets = os.networkInterfaces();
           let ipLocal = "127.0.0.1";
-          for (const name of Object.keys(nets)) {
-            for (const net of nets[name]) {
-              if (net.family === "IPv4" && !net.internal) {
+          for (const name of ["eth0", "wlan0", "enp0s3", "end0"]) {
+            if (nets[name]) {
+              const net = nets[name].find(
+                (v) => v.family === "IPv4" && !v.internal
+              );
+              if (net) {
                 ipLocal = net.address;
+                break;
               }
             }
           }
