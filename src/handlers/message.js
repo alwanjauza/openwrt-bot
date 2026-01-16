@@ -54,6 +54,8 @@ export default async (sock, m, chatUpdate) => {
 ┊ • ${prefix}ping
 ┊ • ${prefix}sms
 ┊ • ${prefix}bandwidth
+┊ • ${prefix}statusaria
+┊ • ${prefix}df
 ┊
 ┊ 🌍 *TOOLS*
 ┊ • ${prefix}weather <city>
@@ -674,6 +676,33 @@ ${smsList.trim()}
         } catch (e) {
           await react("❌");
         }
+        break;
+
+      case "df":
+      case "disk":
+        await react("💾");
+        exec("df -h /mnt/data", (error, stdout, stderr) => {
+          if (error)
+            return sock.sendMessage(remoteJid, {
+              text: "❌ Gagal mengecek disk.",
+            });
+
+          const lines = stdout.split("\n");
+          const data = lines[1].split(/\s+/);
+          const size = data[1];
+          const used = data[2];
+          const free = data[3];
+          const usage = data[4];
+
+          let diskMsg = `╭──〔 💾 DISK STORAGE 〕──\n┊\n`;
+          diskMsg += `┊ 📂 *Mount:* /mnt/data (HDD 1TB)\n`;
+          diskMsg += `┊ 📊 *Total:* ${size}\n`;
+          diskMsg += `┊ 📉 *Terpakai:* ${used} (${usage})\n`;
+          diskMsg += `┊ 🆓 *Tersedia:* ${free}\n┊\n`;
+          diskMsg += `╰──────────────────────`;
+
+          sock.sendMessage(remoteJid, { text: diskMsg }, { quoted: m });
+        });
         break;
     }
   } catch (err) {
