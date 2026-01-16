@@ -59,6 +59,7 @@ export default async (sock, m, chatUpdate) => {
 ┊ • ${prefix}weather <city>
 ┊ • ${prefix}tiktok <link>
 ┊ • ${prefix}short <url>
+┊ • ${prefix}download <url>
 ┊
 ╰──────────────────────`;
         await sock.sendMessage(remoteJid, { text: menuMsg }, { quoted: m });
@@ -582,6 +583,97 @@ ${smsList.trim()}
             }
           });
         });
+        break;
+
+      case "download":
+      case "aria":
+        if (!args[0])
+          return await sock.sendMessage(
+            remoteJid,
+            {
+              text: "❌ Masukkan link! Contoh: .download https://link.com/file.zip",
+            },
+            { quoted: m }
+          );
+
+        await react("⏳");
+
+        try {
+          const rpcToken = process.env.ARIA2_RPC_SECRET || "aria2secret";
+          const rpcUrl = "http://127.0.0.1:6800/jsonrpc";
+
+          const response = await axios.post(rpcUrl, {
+            jsonrpc: "2.0",
+            method: "aria2.addUri",
+            id: "bot",
+            params: [`token:${rpcToken}`, [args[0]]],
+          });
+
+          if (response.data.result) {
+            const successMsg = `✅ *Download Dimulai!*\n\nLink telah ditambahkan ke antrean STB.\nFile akan tersimpan di HDD (/mnt/data/downloads).\n\nGunakan *${prefix}statusaria* untuk cek progres.`;
+            await sock.sendMessage(
+              remoteJid,
+              { text: successMsg },
+              { quoted: m }
+            );
+            await react("🚀");
+          }
+        } catch (e) {
+          console.error("Aria2 Error:", e.message);
+          await sock.sendMessage(
+            remoteJid,
+            {
+              text: "❌ Gagal konek ke Aria2. Pastikan service aria2-server di PM2 sudah jalan.",
+            },
+            { quoted: m }
+          );
+          await react("❌");
+        }
+        break;
+
+      case "statusaria":
+      case "aria2status":
+        await react("📊");
+        try {
+          const rpcToken = process.env.ARIA2_RPC_SECRET || "aria2secret";
+          const rpcUrl = "http://127.0.0.1:6800/jsonrpc";
+
+          const response = await axios.post(rpcUrl, {
+            jsonrpc: "2.0",
+            method: "aria2.tellActive",
+            id: "bot",
+            params: [`token:${rpcToken}`],
+          });
+
+          const activeDownloads = response.data.result;
+          if (activeDownloads.length === 0) {
+            return await sock.sendMessage(
+              remoteJid,
+              { text: "📭 Tidak ada download yang sedang berjalan." },
+              { quoted: m }
+            );
+          }
+
+          let statusMsg = "╭──〔 📥 ARIA2 STATUS 〕──\n┊\n";
+          activeDownloads.forEach((dl, i) => {
+            const fileName =
+              dl.files[0].path.split("/").pop() || "Unknown File";
+            const progress = (
+              (dl.completedLength / dl.totalLength) *
+              100
+            ).toFixed(2);
+            const speed = (dl.downloadSpeed / 1024 / 1024).toFixed(2);
+            statusMsg += `┊ *${
+              i + 1
+            }. ${fileName}*\n┊ ⏳ Progress: ${progress}%\n┊ ⚡ Speed: ${speed} MB/s\n┊\n`;
+          });
+          statusMsg += "╰──────────────────────";
+
+          await sock.sendMessage(remoteJid, { text: statusMsg }, { quoted: m });
+          await react("✅");
+        } catch (e) {
+          await react("❌");
+        }
         break;
     }
   } catch (err) {
