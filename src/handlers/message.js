@@ -53,6 +53,8 @@ export default async (sock, m, chatUpdate) => {
 ┊ 📱 *SYSTEM*
 ┊ • ${prefix}info
 ┊ • ${prefix}ping
+┊ • ${prefix}reboot
+┊ • ${prefix}update
 ┊ • ${prefix}sms
 ┊ • ${prefix}bandwidth
 ┊ • ${prefix}statusaria
@@ -761,6 +763,69 @@ ${smsList.trim()}
 
           sock.sendMessage(remoteJid, { text: diskMsg }, { quoted: m });
         });
+        break;
+
+      case "update":
+      case "upgrade":
+        if (
+          !remoteJid.includes(config.ownerNumber.replace("@s.whatsapp.net", ""))
+        ) {
+          return await sock.sendMessage(remoteJid, {
+            text: "⚠️ Akses ditolak. Hanya pemilik yang bisa update sistem.",
+          });
+        }
+
+        await react("🔄");
+        await sock.sendMessage(remoteJid, {
+          text: "🚀 Memulai pengecekan dan update paket... Mohon tunggu, proses ini mungkin memakan waktu.",
+        });
+
+        const updateCmd = "sudo apt-get update && sudo apt-get upgrade -y";
+
+        exec(updateCmd, async (err, stdout, stderr) => {
+          if (err) {
+            console.error(err);
+            await react("❌");
+            return sock.sendMessage(remoteJid, {
+              text: `❌ *Update Gagal!*\n\nError: ${err.message}`,
+            });
+          }
+
+          const summary = stdout.split("\n").slice(-5).join("\n");
+
+          const successMsg = `╭──〔 🆙 UPDATE SELESAI 〕──
+┊
+┊ ✅ *Status:* Sukses
+┊ 📦 *Log Terakhir:*
+┊ ${summary}
+┊
+┊ 🤖 *Saran:* Jika ada update Kernel,
+┊ silakan ketik *.reboot* untuk menerapkan.
+┊
+╰──────────────────────`;
+
+          await sock.sendMessage(
+            remoteJid,
+            { text: successMsg },
+            { quoted: m }
+          );
+          await react("✅");
+        });
+        break;
+
+      case "reboot":
+        if (
+          !remoteJid.includes(config.ownerNumber.replace("@s.whatsapp.net", ""))
+        ) {
+          return await sock.sendMessage(remoteJid, {
+            text: "⚠️ Akses ditolak. Hanya pemilik yang bisa update sistem.",
+          });
+        }
+        await react("🔄");
+        await sock.sendMessage(remoteJid, {
+          text: "🔄 STB sedang restart... Bot akan offline sementara.",
+        });
+        exec("sudo reboot");
         break;
     }
   } catch (err) {
