@@ -791,7 +791,14 @@ ${smsList.trim()}
             });
           }
 
-          const summary = stdout.split("\n").slice(-5).join("\n");
+          const cleanOutput = stdout
+            .split("\n")
+            .filter(
+              (line) =>
+                !line.includes("(Reading database ...") && line.trim() !== ""
+            );
+
+          const summary = cleanOutput.slice(-5).join("\n");
 
           const successMsg = `╭──〔 🆙 UPDATE SELESAI 〕──
 ┊
