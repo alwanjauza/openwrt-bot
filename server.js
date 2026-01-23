@@ -69,6 +69,7 @@ app.post("/api/send-message", async (req, res) => {
 });
 
 let lastNotify = 0;
+let hasNotifiedReady = false;
 
 async function notifyOwner(sock, text) {
   try {
@@ -79,11 +80,13 @@ async function notifyOwner(sock, text) {
     const jid = config.ownerNumber + "@s.whatsapp.net";
     await sock.sendMessage(jid, { text });
   } catch (e) {
-    console.log("Notify error:", e.message);
+    // console.log("Notify error:", e.message);
   }
 }
 
 async function startBot() {
+  hasNotifiedReady = false;
+
   const { state, saveCreds } = await useMultiFileAuthState(
     path.resolve(__dirname, "src/sessions"),
   );
@@ -119,36 +122,38 @@ async function startBot() {
     if (connection === "close") {
       const code = lastDisconnect?.error?.output?.statusCode;
 
-      if (code === DisconnectReason.loggedOut) {
-        await notifyOwner(
-          sock,
-          `❌ *BOT LOGOUT*
-Session WhatsApp habis.
-Harap scan ulang QR.`,
-        );
-      } else {
+      if (hasNotifiedReady && code !== DisconnectReason.loggedOut) {
         await notifyOwner(
           sock,
           `🔄 *BOT DISCONNECTED*
 Mencoba reconnect...
 Code: ${code || "unknown"}`,
         );
+      }
+
+      if (code !== DisconnectReason.loggedOut) {
         startBot();
       }
     } else if (connection === "open") {
       console.log("✅ Bot Terhubung ke WhatsApp!");
       initCron(sock);
 
-      await notifyOwner(
-        sock,
-        `╭──〔 🤖 BOT READY 〕──
+      if (!hasNotifiedReady) {
+        hasNotifiedReady = true;
+
+        setTimeout(() => {
+          safeNotify(
+            sock,
+            `╭──〔 🤖 BOT READY 〕──
 ┊
 ┊ ✅ Status : Online
 ┊ 🕒 Time   : ${new Date().toLocaleString("id-ID")}
 ┊ 🖥️ Host   : STB Armbian
 ┊
 ╰──────────────────────`,
-      );
+          );
+        }, 10000);
+      }
     }
   });
 
