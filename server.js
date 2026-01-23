@@ -80,7 +80,16 @@ async function notifyOwner(sock, text) {
     const jid = config.ownerNumber + "@s.whatsapp.net";
     await sock.sendMessage(jid, { text });
   } catch (e) {
-    // console.log("Notify error:", e.message);
+    console.log("Notify error:", e.message);
+  }
+}
+
+async function safeNotify(sock, text) {
+  try {
+    if (!sock?.ws || sock.ws.readyState !== 1) return;
+    await notifyOwner(sock, text);
+  } catch (e) {
+    // silent fail (important for STB)
   }
 }
 
