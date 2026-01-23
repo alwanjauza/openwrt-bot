@@ -23,9 +23,20 @@ const app = express();
 const PORT = 3000;
 const API_SECRET = process.env.API_SECRET || "123";
 
-app.use(bodyParser.json());
+// app.use(bodyParser.json());
+app.use(
+  express.json({
+    limit: "256kb",
+  }),
+);
 
-const groupCache = new NodeCache({ stdTTL: 5 * 60, useClones: false });
+// const groupCache = new NodeCache({ stdTTL: 5 * 60, useClones: false });
+const groupCache = new NodeCache({
+  stdTTL: 120,
+  checkperiod: 300,
+  useClones: false,
+});
+
 let globalSock;
 
 app.post("/api/send-message", async (req, res) => {
@@ -59,7 +70,7 @@ app.post("/api/send-message", async (req, res) => {
 
 async function startBot() {
   const { state, saveCreds } = await useMultiFileAuthState(
-    path.resolve(__dirname, "src/sessions")
+    path.resolve(__dirname, "src/sessions"),
   );
 
   const sock = makeWASocket({
@@ -76,6 +87,8 @@ async function startBot() {
       return { conversation: "Hello" };
     },
     syncFullHistory: false,
+    shouldIgnoreJid: (jid) => jid.endsWith("@newsletter"),
+    connectTimeoutMs: 30_000,
   });
 
   globalSock = sock;

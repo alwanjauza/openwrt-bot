@@ -1,9 +1,11 @@
 import { getSystemInfo } from "../utils/sysinfo.js";
 import { exec } from "child_process";
 import os from "os";
-import axios from "axios";
 import config from "../config.js";
 import { getHuaweiSMS } from "../utils/huawei.js";
+import http from "../utils/http.js";
+
+let isBusy = false;
 
 export default async (sock, m, chatUpdate) => {
   try {
@@ -12,10 +14,10 @@ export default async (sock, m, chatUpdate) => {
       msgType === "conversation"
         ? m.message.conversation
         : msgType === "extendedTextMessage"
-        ? m.message.extendedTextMessage.text
-        : msgType === "imageMessage"
-        ? m.message.imageMessage.caption
-        : "";
+          ? m.message.extendedTextMessage.text
+          : msgType === "imageMessage"
+            ? m.message.imageMessage.caption
+            : "";
 
     if (!body) return;
 
@@ -27,7 +29,10 @@ export default async (sock, m, chatUpdate) => {
     const args = body.trim().split(/ +/).slice(1);
     const remoteJid = m.key.remoteJid;
 
-    if (isCmd) console.log(`[CMD] ${command} from ${remoteJid}`);
+    // if (isCmd) console.log(`[CMD] ${command} from ${remoteJid}`);
+    if (isCmd && process.env.DEBUG === "true") {
+      console.log(`[CMD] ${command}`);
+    }
 
     const react = async (emoji) => {
       await sock.sendMessage(remoteJid, {
@@ -78,7 +83,7 @@ export default async (sock, m, chatUpdate) => {
           return await sock.sendMessage(
             remoteJid,
             { text: "❌ Please ask something! Ex: .ai How to cook rice?" },
-            { quoted: m }
+            { quoted: m },
           );
         await react("🧠");
 
@@ -88,21 +93,21 @@ export default async (sock, m, chatUpdate) => {
             await sock.sendMessage(
               remoteJid,
               { text: "❌ Gemini API Key missing in .env" },
-              { quoted: m }
+              { quoted: m },
             );
             return await react("❌");
           }
 
           const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
 
-          const response = await axios.post(
+          const response = await http.post(
             url,
             {
               contents: [{ parts: [{ text: args.join(" ") }] }],
             },
             {
               headers: { "Content-Type": "application/json" },
-            }
+            },
           );
 
           const answer = response.data.candidates[0].content.parts[0].text;
@@ -118,7 +123,7 @@ ${answer.trim()}
         } catch (e) {
           console.error(
             "Gemini Error:",
-            e.response ? e.response.data : e.message
+            e.response ? e.response.data : e.message,
           );
 
           let errMsg = "❌ AI is currently unavailable.";
@@ -144,25 +149,25 @@ ${answer.trim()}
           return await sock.sendMessage(
             remoteJid,
             { text: "❌ Send a link! Ex: .short https://google.com" },
-            { quoted: m }
+            { quoted: m },
           );
         await react("⏳");
 
         try {
           const url = `https://tinyurl.com/api-create.php?url=${args[0]}`;
-          const res = await axios.get(url);
+          const res = await http.get(url);
 
           await sock.sendMessage(
             remoteJid,
             { text: `🔗 *Shortlink Created:*\n${res.data}` },
-            { quoted: m }
+            { quoted: m },
           );
           await react("✅");
         } catch (e) {
           await sock.sendMessage(
             remoteJid,
             { text: "❌ Failed to shorten URL." },
-            { quoted: m }
+            { quoted: m },
           );
           await react("❌");
         }
@@ -175,7 +180,7 @@ ${answer.trim()}
           {
             text: `╭──〔 🏓 PONG! 〕──\n┊ \n┊ Bot Online & Ready!\n┊ Speed: Fast ⚡\n┊\n╰──────────────────────`,
           },
-          { quoted: m }
+          { quoted: m },
         );
         await react("✅");
         break;
@@ -238,7 +243,7 @@ ${answer.trim()}
           for (const name of ["eth0", "wlan0", "enp0s3", "end0"]) {
             if (nets[name]) {
               const net = nets[name].find(
-                (v) => v.family === "IPv4" && !v.internal
+                (v) => v.family === "IPv4" && !v.internal,
               );
               if (net) {
                 ipLocal = net.address;
@@ -273,16 +278,16 @@ ${answer.trim()}
           return await sock.sendMessage(
             remoteJid,
             { text: "❌ Input city name!" },
-            { quoted: m }
+            { quoted: m },
           );
         await react("⏳");
         try {
           const apiKey = process.env.OPENWEATHER_API_KEY;
           if (!apiKey) return await react("❌");
-          const { data } = await axios.get(
+          const { data } = await http.get(
             `https://api.openweathermap.org/data/2.5/weather?q=${args.join(
-              " "
-            )}&appid=${apiKey}&units=metric&lang=en`
+              " ",
+            )}&appid=${apiKey}&units=metric&lang=en`,
           );
           const cuacaMsg = `╭──〔 🌦️ WEATHER REPORT 〕──\n┊\n┊ 🏙️ City      : ${data.name}, ${data.sys.country}\n┊ 🌡️ Temp      : ${data.main.temp}°C\n┊ ☁️ Condition : ${data.weather[0].description}\n┊ 💧 Humidity  : ${data.main.humidity}%\n┊ 💨 Wind      : ${data.wind.speed} m/s\n┊\n╰──────────────────────`;
           await sock.sendMessage(remoteJid, { text: cuacaMsg }, { quoted: m });
@@ -291,7 +296,7 @@ ${answer.trim()}
           await sock.sendMessage(
             remoteJid,
             { text: "❌ City not found." },
-            { quoted: m }
+            { quoted: m },
           );
           await react("❌");
         }
@@ -299,20 +304,35 @@ ${answer.trim()}
 
       case "speedtest":
       case "speed":
+        if (isBusy) {
+          return sock.sendMessage(
+            remoteJid,
+            {
+              text: "⏳ Sistem sedang sibuk, tunggu proses sebelumnya selesai.",
+            },
+            { quoted: m },
+          );
+        }
+
+        isBusy = true;
+
         await react("⏳");
         await sock.sendMessage(
           remoteJid,
           { text: "🚀 *Speedtest running...*\n⏳ Please wait ±30s." },
-          { quoted: m }
+          { quoted: m },
         );
+
         exec(
           "speedtest --accept-license --accept-gdpr",
           async (error, stdout, stderr) => {
+            isBusy = false;
+
             if (error) {
               await sock.sendMessage(
                 remoteJid,
                 { text: "❌ Speedtest failed." },
-                { quoted: m }
+                { quoted: m },
               );
               return await react("❌");
             }
@@ -321,23 +341,23 @@ ${answer.trim()}
               {
                 text: `╭──〔 🚀 SPEEDTEST RESULT 〕──\n┊\n${stdout.trim()}\n┊\n╰──────────────────────`,
               },
-              { quoted: m }
+              { quoted: m },
             );
             await react("✅");
-          }
+          },
         );
         break;
 
       case "myip":
         await react("⏳");
         try {
-          const { data } = await axios.get("https://ipinfo.io/json");
+          const { data } = await http.get("https://ipinfo.io/json");
           await sock.sendMessage(
             remoteJid,
             {
               text: `╭──〔 🌍 PUBLIC IP INFO 〕──\n┊\n┊ 📍 IP       : ${data.ip}\n┊ 🏢 ISP      : ${data.org}\n┊ 🏙️ Location : ${data.city}, ${data.country}\n┊\n╰──────────────────────`,
             },
-            { quoted: m }
+            { quoted: m },
           );
           await react("✅");
         } catch (e) {
@@ -354,19 +374,19 @@ ${answer.trim()}
         await sock.sendMessage(
           remoteJid,
           { text: "♻️ Restarting AdGuard Home..." },
-          { quoted: m }
+          { quoted: m },
         );
         exec("systemctl restart AdGuardHome", async (err) => {
           if (err)
             return await sock.sendMessage(
               remoteJid,
               { text: "❌ Failed." },
-              { quoted: m }
+              { quoted: m },
             );
           await sock.sendMessage(
             remoteJid,
             { text: "✅ AdGuard Home Restarted!" },
-            { quoted: m }
+            { quoted: m },
           );
           await react("✅");
         });
@@ -381,19 +401,19 @@ ${answer.trim()}
         await sock.sendMessage(
           remoteJid,
           { text: "♻️ Restarting Cloudflare Tunnel..." },
-          { quoted: m }
+          { quoted: m },
         );
         exec("systemctl restart cloudflared", async (err) => {
           if (err)
             return await sock.sendMessage(
               remoteJid,
               { text: "❌ Failed." },
-              { quoted: m }
+              { quoted: m },
             );
           await sock.sendMessage(
             remoteJid,
             { text: "✅ Cloudflare Tunnel Restarted!" },
-            { quoted: m }
+            { quoted: m },
           );
           await react("✅");
         });
@@ -407,14 +427,14 @@ ${answer.trim()}
           return await sock.sendMessage(
             remoteJid,
             { text: "⛔ Access Denied!" },
-            { quoted: m }
+            { quoted: m },
           );
         }
         await react("⏳");
         await sock.sendMessage(
           remoteJid,
           { text: "♻️ Restarting OpenClash..." },
-          { quoted: m }
+          { quoted: m },
         );
         exec("/etc/init.d/openclash restart", async (err) => {
           if (err) {
@@ -422,7 +442,7 @@ ${answer.trim()}
             return await sock.sendMessage(
               remoteJid,
               { text: "❌ Failed." },
-              { quoted: m }
+              { quoted: m },
             );
           }
           await sock.sendMessage(
@@ -430,7 +450,7 @@ ${answer.trim()}
             {
               text: `╭──〔 ✅ SUCCESS 〕──\n┊\n┊ OpenClash restarted!\n┊\n╰──────────────────────`,
             },
-            { quoted: m }
+            { quoted: m },
           );
           await react("✅");
         });
@@ -442,19 +462,19 @@ ${answer.trim()}
           return await sock.sendMessage(
             remoteJid,
             { text: "❌ Link required!" },
-            { quoted: m }
+            { quoted: m },
           );
         await react("⏳");
         try {
-          const { data } = await axios.get(
-            `https://www.tikwm.com/api/?url=${args[0]}`
+          const { data } = await http.get(
+            `https://www.tikwm.com/api/?url=${args[0]}`,
           );
           if (!data.data) {
             await react("❌");
             return await sock.sendMessage(
               remoteJid,
               { text: "❌ Not found." },
-              { quoted: m }
+              { quoted: m },
             );
           }
           const v = data.data;
@@ -464,7 +484,7 @@ ${answer.trim()}
               video: { url: v.play },
               caption: `╭──〔 🎵 TIKTOK 〕──\n┊ 📝 ${v.title}\n┊ 👤 ${v.author.nickname}\n╰────────────────`,
             },
-            { quoted: m }
+            { quoted: m },
           );
           await react("✅");
         } catch (e) {
@@ -484,7 +504,7 @@ ${answer.trim()}
         await sock.sendMessage(
           remoteJid,
           { text: "⏳ Fetching SMS from Huawei HiLink..." },
-          { quoted: m }
+          { quoted: m },
         );
 
         try {
@@ -499,7 +519,7 @@ ${answer.trim()}
             await sock.sendMessage(
               remoteJid,
               { text: emptyMsg },
-              { quoted: m }
+              { quoted: m },
             );
             return await react("✅");
           }
@@ -544,7 +564,7 @@ ${answer.trim()}
             const senderClean = sender.trim();
             const dateClean = date.trim();
             const contentClean = shorten(
-              content.replace(/\r\n/g, "\n").replace(/\s+$/g, "")
+              content.replace(/\r\n/g, "\n").replace(/\s+$/g, ""),
             );
 
             smsList += `📨 *${senderClean}* (${dateClean})\n${contentClean}\n\n`;
@@ -567,7 +587,7 @@ ${smsList.trim()}
             {
               text: `❌ Error: ${e && e.message ? e.message : "Unknown error"}`,
             },
-            { quoted: m }
+            { quoted: m },
           );
           await react("❌");
         }
@@ -616,6 +636,18 @@ ${smsList.trim()}
       case "bandwidth":
       case "usage":
       case "bw":
+        if (isBusy) {
+          return sock.sendMessage(
+            remoteJid,
+            {
+              text: "⏳ Sistem sedang sibuk, tunggu proses sebelumnya selesai.",
+            },
+            { quoted: m },
+          );
+        }
+
+        isBusy = true;
+
         await react("📊");
         const ifaceCmd = "ip route | grep default | awk '{print $5}'";
 
@@ -624,11 +656,13 @@ ${smsList.trim()}
           sock.sendMessage(
             remoteJid,
             { text: `⏳ Mengambil data trafik (${iface})...` },
-            { quoted: m }
+            { quoted: m },
           );
 
           const cmd = `vnstat -i ${iface}; echo "--- Weekly ---"; vnstat -i ${iface} -w`;
           exec(cmd, (err, stdout) => {
+            isBusy = false;
+
             if (stdout) {
               const msg = `╭──〔 📊 TRAFFIC INFO 〕──\n┊\n┊ *Interface:* ${iface}\n\`\`\`${stdout.trim()}\`\`\`\n┊\n╰──────────────────────`;
               sock.sendMessage(remoteJid, { text: msg }, { quoted: m });
@@ -639,7 +673,7 @@ ${smsList.trim()}
                 {
                   text: "❌ Vnstat belum terinstall atau interface tidak ditemukan.",
                 },
-                { quoted: m }
+                { quoted: m },
               );
               react("❌");
             }
@@ -655,7 +689,7 @@ ${smsList.trim()}
             {
               text: "❌ Masukkan link! Contoh: .download https://link.com/file.zip",
             },
-            { quoted: m }
+            { quoted: m },
           );
 
         await react("⏳");
@@ -664,7 +698,7 @@ ${smsList.trim()}
           const rpcToken = process.env.ARIA2_RPC_SECRET || "aria2secret";
           const rpcUrl = "http://127.0.0.1:6800/jsonrpc";
 
-          const response = await axios.post(rpcUrl, {
+          const response = await http.post(rpcUrl, {
             jsonrpc: "2.0",
             method: "aria2.addUri",
             id: "bot",
@@ -676,7 +710,7 @@ ${smsList.trim()}
             await sock.sendMessage(
               remoteJid,
               { text: successMsg },
-              { quoted: m }
+              { quoted: m },
             );
             await react("🚀");
           }
@@ -687,7 +721,7 @@ ${smsList.trim()}
             {
               text: "❌ Gagal konek ke Aria2. Pastikan service aria2-server di PM2 sudah jalan.",
             },
-            { quoted: m }
+            { quoted: m },
           );
           await react("❌");
         }
@@ -700,7 +734,7 @@ ${smsList.trim()}
           const rpcToken = process.env.ARIA2_RPC_SECRET || "aria2secret";
           const rpcUrl = "http://127.0.0.1:6800/jsonrpc";
 
-          const response = await axios.post(rpcUrl, {
+          const response = await http.post(rpcUrl, {
             jsonrpc: "2.0",
             method: "aria2.tellActive",
             id: "bot",
@@ -712,7 +746,7 @@ ${smsList.trim()}
             return await sock.sendMessage(
               remoteJid,
               { text: "📭 Tidak ada download yang sedang berjalan." },
-              { quoted: m }
+              { quoted: m },
             );
           }
 
@@ -740,8 +774,22 @@ ${smsList.trim()}
 
       case "df":
       case "disk":
+        if (isBusy) {
+          return sock.sendMessage(
+            remoteJid,
+            {
+              text: "⏳ Sistem sedang sibuk, tunggu proses sebelumnya selesai.",
+            },
+            { quoted: m },
+          );
+        }
+
+        isBusy = true;
+
         await react("💾");
         exec("df -h /mnt/data", (error, stdout, stderr) => {
+          isBusy = false;
+
           if (error)
             return sock.sendMessage(remoteJid, {
               text: "❌ Gagal mengecek disk.",
@@ -775,6 +823,18 @@ ${smsList.trim()}
           });
         }
 
+        if (isBusy) {
+          return sock.sendMessage(
+            remoteJid,
+            {
+              text: "⏳ Sistem sedang sibuk, tunggu proses sebelumnya selesai.",
+            },
+            { quoted: m },
+          );
+        }
+
+        isBusy = true;
+
         await react("🔄");
         await sock.sendMessage(remoteJid, {
           text: "🚀 Memulai pengecekan dan update paket... Mohon tunggu, proses ini mungkin memakan waktu.",
@@ -783,6 +843,8 @@ ${smsList.trim()}
         const updateCmd = "sudo apt-get update && sudo apt-get upgrade -y";
 
         exec(updateCmd, async (err, stdout, stderr) => {
+          isBusy = false;
+
           if (err) {
             console.error(err);
             await react("❌");
@@ -795,7 +857,7 @@ ${smsList.trim()}
             .split("\n")
             .filter(
               (line) =>
-                !line.includes("(Reading database ...") && line.trim() !== ""
+                !line.includes("(Reading database ...") && line.trim() !== "",
             );
 
           const summary = cleanOutput.slice(-5).join("\n");
@@ -814,7 +876,7 @@ ${smsList.trim()}
           await sock.sendMessage(
             remoteJid,
             { text: successMsg },
-            { quoted: m }
+            { quoted: m },
           );
           await react("✅");
         });
@@ -828,11 +890,24 @@ ${smsList.trim()}
             text: "⚠️ Akses ditolak. Hanya pemilik yang bisa update sistem.",
           });
         }
+        if (isBusy) {
+          return sock.sendMessage(
+            remoteJid,
+            {
+              text: "⏳ Sistem sedang sibuk, tunggu proses sebelumnya selesai.",
+            },
+            { quoted: m },
+          );
+        }
+
+        isBusy = true;
+
         await react("🔄");
         await sock.sendMessage(remoteJid, {
           text: "🔄 STB sedang restart... Bot akan offline sementara.",
         });
         exec("sudo reboot");
+        isBusy = false;
         break;
     }
   } catch (err) {
