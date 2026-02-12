@@ -43,7 +43,7 @@ async function clearUpdateLog(sock) {
 
 async function sendSpecialPartnerMessage(sock) {
   const partnerNumber = process.env.PARTNER_NUMBER + "@s.whatsapp.net";
-  const ownerNumber = process.env.OWNER_NUMBER + "@s.whatsapp.net";
+  //   const ownerNumber = process.env.OWNER_NUMBER + "@s.whatsapp.net";
 
   const message = `╭──〔 🥂 HAPPY 25th BIRTHDAY 〕──
 ┊
@@ -79,7 +79,7 @@ async function sendSpecialPartnerMessage(sock) {
 ╰──────────────────────`;
 
   try {
-    await sock.sendMessage(ownerNumber, { text: message });
+    await sock.sendMessage(partnerNumber, { text: message });
     console.log("💖 Special romantic 25th birthday message sent.");
   } catch (error) {
     console.error("❌ Failed to send special message:", error);
@@ -122,7 +122,7 @@ export const initCron = (sock) => {
   );
 
   const task3 = cron.schedule(
-    "10 23 12 2 *",
+    "0 0 16 2 *",
     async () => {
       const now = new Date();
       const currentYear = now.getFullYear();
